@@ -1,0 +1,2685 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robo Data Finder</title>
+  <link rel="icon" type="image/png" href="https://static.robo-universe.com/assets/logos/robo/logo/500x500.png" />
+  <script src="https://cdn.tailwindcss.com" onerror="window.__tailwindFailed=true"></script>
+  <script>
+    // Guard against Tailwind CDN failure (common on mobile with slow/blocked network).
+    // Without this guard, `tailwind is not defined` would throw and crash all other
+    // inline scripts, leaving the page blank.
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: { extend: { fontFamily: { sans: ['Helvetica', 'Helvetica Neue', 'Arial', 'sans-serif'] } } },
+      };
+    } else {
+      console.warn('Tailwind CDN did not load — using fallback CSS.');
+      window.__tailwindFailed = true;
+    }
+    (function () {
+      try {
+        const root = document.documentElement;
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const apply = (isDark) => root.classList.toggle('dark', isDark);
+        apply(mq.matches);
+        if (mq.addEventListener) mq.addEventListener('change', (e) => apply(e.matches));
+        else if (mq.addListener) mq.addListener((e) => apply(e.matches));  // Safari <14
+      } catch (e) { console.warn('dark-mode setup failed:', e); }
+    })();
+    // Global error trap so a single bug can't leave the page blank
+    window.addEventListener('error', function (e) {
+      console.error('[global error]', e.message, 'at', e.filename + ':' + e.lineno);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      console.error('[unhandled promise]', e.reason);
+    });
+  </script>
+  <style>
+    html, body { font-family: 'Helvetica', 'Helvetica Neue', Arial, sans-serif; overflow-x: hidden; }
+    * { min-width: 0; box-sizing: border-box; }
+    /* Baseline styles that work with or without Tailwind. If the Tailwind CDN
+       fails to load on mobile (slow/blocked network), the page still renders. */
+    body { margin: 0; background: #fff; color: #1a1a1a; min-height: 100vh; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0a0a0a; color: #f3f4f6; }
+    }
+    body > div { max-width: 72rem; margin: 0 auto; padding: 0.75rem; }
+    @media (min-width: 640px) { body > div { padding: 1.5rem; } }
+    @media (min-width: 768px) { body > div { padding: 2.5rem; } }
+    header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    header img { width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; }
+    header h1 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    @media (min-width: 640px) {
+      header img { width: 3.5rem; height: 3.5rem; }
+      header h1 { font-size: 1.5rem; }
+    }
+    section { margin-bottom: 0.75rem; }
+    /* Grid rows */
+    body > div > div.grid { display: grid; gap: 0.75rem; margin-bottom: 0.75rem; }
+    @media (min-width: 640px) {
+      body > div > div.grid { gap: 1.5rem; margin-bottom: 1.5rem; }
+      body > div > div.grid.sm\:grid-cols-2, body > div > div[class*="sm:grid-cols-2"] { grid-template-columns: 1fr 1fr; }
+    }
+    .kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 0.75rem; row-gap: 0.4rem; align-items: baseline; }
+    .kv dt { color: rgb(107 114 128); white-space: nowrap; }
+    .dark .kv dt { color: rgb(156 163 175); }
+    .kv dd { font-weight: 500; word-break: break-word; overflow-wrap: anywhere; min-width: 0; }
+    /* On very narrow screens stack the label above the value for readability */
+    @media (max-width: 480px) {
+      .kv { grid-template-columns: minmax(0, 1fr); row-gap: 0.15rem; }
+      .kv dt { font-size: 0.75rem; margin-top: 0.4rem; }
+      .kv dt:first-child { margin-top: 0; }
+      .kv dd { padding-left: 0; }
+    }
+    /* Any long strings that shouldn't cause horizontal scroll */
+    code, pre { overflow-wrap: anywhere; word-break: break-word; }
+    .req-btn {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      background: rgb(59 130 246);
+      color: white;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+    .req-btn:hover { background: rgb(37 99 235); }
+    .req-btn:disabled { background: rgb(107 114 128); cursor: not-allowed; opacity: 0.6; }
+    .dark .req-btn { background: rgb(37 99 235); }
+    .dark .req-btn:hover { background: rgb(59 130 246); }
+    .upd-btn {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      background: rgb(16 185 129);
+      color: white;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+    .upd-btn:hover { background: rgb(5 150 105); }
+    .upd-btn:disabled { background: rgb(107 114 128); cursor: not-allowed; opacity: 0.6; }
+    .test-btn {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      background: rgb(249 115 22);
+      color: white;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+    .test-btn:hover { background: rgb(234 88 12); }
+    .test-btn:disabled { background: rgb(107 114 128); cursor: not-allowed; opacity: 0.6; }
+    .test-btn-lg {
+      padding: 0.6rem 1.5rem;
+      border-radius: 9999px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      background: rgb(249 115 22);
+      color: white;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+    .test-btn-lg:hover { background: rgb(234 88 12); }
+    .action-btn {
+      display: inline-block;
+      padding: 0.35rem 0.9rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgb(220 38 38);
+      color: white;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+    .action-btn:hover { background: rgb(185 28 28); }
+    .action-btn:disabled { background: rgb(107 114 128); opacity: 0.6; cursor: not-allowed; }
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; padding: 1rem;
+      /* Use dvh so mobile browser address bars don't clip the modal */
+      height: 100vh; height: 100dvh;
+    }
+    .modal-card {
+      background: white;
+      border-radius: 1.5rem;
+      padding: 2rem;
+      max-width: 42rem; width: 100%;
+      max-height: 90vh; max-height: 90dvh; overflow-y: auto;
+      overflow-x: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+      -webkit-overflow-scrolling: touch;
+    }
+    @media (max-width: 640px) {
+      .modal-backdrop { padding: 0.5rem; }
+      .modal-card { padding: 1.25rem; border-radius: 1rem; max-height: 95dvh; }
+    }
+    .dark .modal-card { background: rgb(23 23 23); color: rgb(243 244 246); }
+    .modal-select {
+      background: white; color: rgb(17 24 39);
+      border: 1px solid rgb(209 213 219);
+      border-radius: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.875rem;
+      min-width: 0;
+      max-width: 100%;
+      flex: 1 1 auto;
+    }
+    .dark .modal-select { background: rgb(38 38 38); color: white; border-color: rgb(64 64 64); }
+    .preview-box {
+      background: black;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin-top: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 12rem;
+      max-width: 100%;
+    }
+    @media (min-width: 640px) { .preview-box { min-height: 16rem; } }
+    .preview-box video { width: 100%; max-width: 100%; max-height: 24rem; display: block; }
+    .mic-meter {
+      width: 100%; height: 1.5rem;
+      background: rgb(38 38 38);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+    .mic-meter-fill {
+      height: 100%;
+      background: linear-gradient(to right, rgb(34 197 94), rgb(234 179 8), rgb(239 68 68));
+      width: 0%;
+      transition: width 60ms linear;
+    }
+    .card { border-radius: 1rem; padding: 1.5rem; background: #f3f4f6; border: 1px solid #e5e7eb; }
+    .inner { border-radius: 0.75rem; padding: 1rem; font-size: 0.875rem; overflow-wrap: anywhere; background: #fff; border: 1px solid #e5e7eb; }
+    @media (prefers-color-scheme: dark) {
+      .card { background: #171717; border-color: #262626; }
+      .inner { background: #0a0a0a; border-color: #262626; color: #f3f4f6; }
+    }
+    h2 { font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; }
+    @media (max-width: 640px) {
+      .card { padding: 1rem; border-radius: 0.875rem; }
+      .inner { padding: 0.75rem; font-size: 0.8125rem; }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-white text-gray-900 dark:bg-neutral-950 dark:text-gray-100 transition-colors duration-300">
+
+  <div class="max-w-6xl mx-auto p-3 sm:p-6 md:p-10">
+
+    <header class="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8 flex-wrap">
+      <img src="https://static.robo-universe.com/assets/logos/robo/logo/500x500.png" alt="Robo Logo" class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl shadow" />
+      <h1 class="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Robo Data Finder</h1>
+    </header>
+
+    <!-- Row 1: Device + OS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Device</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Type:</dt><dd id="dv-type">—</dd>
+            <dt>Vendor:</dt><dd id="dv-vendor">—</dd>
+            <dt>Model:</dt><dd id="dv-model">—</dd>
+            <dt>Form Factor:</dt><dd id="dv-form">—</dd>
+            <dt>Mobile:</dt><dd id="dv-mobile">—</dd>
+            <dt>Touch Support:</dt><dd id="dv-touch">—</dd>
+            <dt>Pointer:</dt><dd id="dv-pointer">—</dd>
+            <dt>Hover:</dt><dd id="dv-hover">—</dd>
+            <dt>Virtual Keyboard:</dt><dd id="dv-vkbd">—</dd>
+            <dt>Keyboard Layout:</dt><dd id="dv-keylayout">—</dd>
+            <dt>Connected Bluetooth:</dt>
+            <dd><span id="op-bt">—</span> <button id="btn-bt" class="req-btn">Click to Request</button></dd>
+            <dt>Connected USB:</dt>
+            <dd><span id="op-usb">—</span> <button id="btn-usb" class="req-btn">Click to Request</button></dd>
+            <dt>Connected HID:</dt>
+            <dd><span id="op-hid">—</span> <button id="btn-hid" class="req-btn">Click to Request</button></dd>
+            <dt>Connected Serial:</dt>
+            <dd><span id="op-serial">—</span> <button id="btn-serial" class="req-btn">Click to Request</button></dd>
+            <dt>Connected Gamepads:</dt>
+            <dd><span id="op-gamepad">—</span> <button id="btn-gamepad" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Operating System</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Detected:</dt><dd id="os-detected">—</dd>
+            <dt>Version:</dt><dd id="os-version">—</dd>
+            <dt>Platform:</dt><dd id="os-platform">—</dd>
+            <dt>OSCPU:</dt><dd id="os-oscpu">—</dd>
+            <dt>Architecture:</dt><dd id="os-arch">—</dd>
+            <dt>Bitness:</dt><dd id="os-bitness">—</dd>
+            <dt>WOW64:</dt><dd id="os-wow64">—</dd>
+            <dt>Language:</dt><dd id="os-language">—</dd>
+            <dt>Languages:</dt><dd id="os-languages">—</dd>
+            <dt>Mobile:</dt><dd id="os-mobile">—</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 2: Browser + Hardware -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Browser</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv mb-3">
+            <dt>Name:</dt><dd id="br-name">—</dd>
+            <dt>Version:</dt><dd id="br-version">—</dd>
+            <dt>Full Version:</dt><dd id="br-fullversion">—</dd>
+            <dt>Engine:</dt><dd id="br-engine">—</dd>
+            <dt>Vendor:</dt><dd id="br-vendor">—</dd>
+            <dt>Brands:</dt><dd id="br-brands">—</dd>
+            <dt>Product:</dt><dd id="br-product">—</dd>
+            <dt>App Name:</dt><dd id="br-appname">—</dd>
+            <dt>App Version:</dt><dd id="br-appversion">—</dd>
+            <dt>Build ID:</dt><dd id="br-build">—</dd>
+            <dt>WebDriver:</dt><dd id="br-webdriver">—</dd>
+            <dt>Java Enabled:</dt><dd id="br-java">—</dd>
+            <dt>Autoplay Policy:</dt><dd id="br-autoplay">—</dd>
+            <dt>PDF Viewer:</dt><dd id="br-pdf">—</dd>
+          </dl>
+          <p class="pt-2 border-t border-gray-200 dark:border-neutral-800"><span class="text-gray-500 dark:text-gray-400">User Agent (accurate):</span></p>
+          <p id="br-ua-accurate" class="text-xs break-words leading-relaxed font-medium">—</p>
+          <p class="pt-2"><span class="text-gray-500 dark:text-gray-400">User Agent (raw / browser-reported):</span></p>
+          <p id="br-ua" class="text-xs break-words leading-relaxed opacity-80">—</p>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Hardware</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>CPU Cores:</dt><dd id="hw-cores">—</dd>
+            <dt>Device Memory:</dt><dd id="hw-memory">—</dd>
+            <dt>JS Heap Limit:</dt><dd id="hw-heap-limit">—</dd>
+            <dt>JS Heap Total:</dt><dd id="hw-heap-total">—</dd>
+            <dt>JS Heap Used:</dt><dd><span id="hw-heap-used">—</span> <button id="upd-mem" class="upd-btn">Update</button></dd>
+            <dt>GPU Vendor:</dt><dd id="hw-gpu-vendor">—</dd>
+            <dt>GPU Renderer:</dt><dd id="hw-gpu-renderer">—</dd>
+            <dt>Max Touch Points:</dt><dd id="hw-touch">—</dd>
+            <dt>Battery:</dt><dd><span id="hw-battery">—</span> <button id="upd-battery" class="upd-btn">Update</button></dd>
+            <dt>Charging Time:</dt><dd id="hw-battery-charge">—</dd>
+            <dt>Discharging Time:</dt><dd id="hw-battery-discharge">—</dd>
+            <dt>Screen Wake Lock:</dt>
+            <dd><span id="op-wake">—</span> <button id="btn-wake" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 3: Display + Locale -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Display</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Screen Size:</dt><dd id="dp-screen">—</dd>
+            <dt>Available:</dt><dd id="dp-avail">—</dd>
+            <dt>Viewport:</dt><dd><span id="dp-viewport">—</span> <button id="upd-viewport" class="upd-btn">Update</button></dd>
+            <dt>Pixel Ratio:</dt><dd id="dp-dpr">—</dd>
+            <dt>Color Depth:</dt><dd id="dp-color">—</dd>
+            <dt>Pixel Depth:</dt><dd id="dp-pxdepth">—</dd>
+            <dt>Orientation:</dt><dd id="dp-orient">—</dd>
+            <dt>Color Gamut:</dt><dd id="dp-gamut">—</dd>
+            <dt>HDR:</dt><dd id="dp-hdr">—</dd>
+            <dt>Color Scheme:</dt><dd id="dp-scheme">—</dd>
+            <dt>Reduced Motion:</dt><dd id="dp-motion">—</dd>
+            <dt>Contrast Pref:</dt><dd id="dp-contrast">—</dd>
+            <dt>Forced Colors:</dt><dd id="dp-forced">—</dd>
+            <dt>Refresh Rate:</dt><dd id="dp-refresh">—</dd>
+            <dt>All Monitors:</dt>
+            <dd><span id="op-screens">—</span> <button id="btn-screens" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Locale &amp; Time</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Timezone:</dt><dd id="lc-tz">—</dd>
+            <dt>UTC Offset:</dt><dd id="lc-offset">—</dd>
+            <dt>Locale:</dt><dd id="lc-locale">—</dd>
+            <dt>Calendar:</dt><dd id="lc-cal">—</dd>
+            <dt>Numbering:</dt><dd id="lc-num">—</dd>
+            <dt>Hour Cycle:</dt><dd id="lc-hour">—</dd>
+            <dt>Currency:</dt><dd id="lc-currency">—</dd>
+            <dt>First Day of Week:</dt><dd id="lc-firstday">—</dd>
+            <dt>Current Time:</dt><dd id="lc-time">—</dd>
+            <dt>Page Loaded:</dt><dd id="lc-loaded">—</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 4: Network + IP Geolocation -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Network</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Online:</dt><dd><span id="nw-online">—</span> <button id="upd-network" class="upd-btn">Update</button></dd>
+            <dt>Connection Type:</dt><dd id="nw-type">—</dd>
+            <dt>Effective Type:</dt><dd id="nw-effective">—</dd>
+            <dt>Downlink:</dt><dd id="nw-downlink">—</dd>
+            <dt>Downlink Max:</dt><dd id="nw-downmax">—</dd>
+            <dt>RTT:</dt><dd id="nw-rtt">—</dd>
+            <dt>Save Data:</dt><dd id="nw-save">—</dd>
+            <dt>Protocol:</dt><dd id="nw-protocol">—</dd>
+            <dt>Host:</dt><dd id="nw-host">—</dd>
+            <dt>Public IP:</dt><dd><span id="nw-ip">—</span> <button id="upd-ip" class="upd-btn">Update</button></dd>
+            <dt>Local IPs (LAN):</dt>
+            <dd><span id="op-webrtc">—</span> <button id="btn-webrtc" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">IP Geolocation</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Country:</dt><dd id="ip-country">—</dd>
+            <dt>Region:</dt><dd id="ip-region">—</dd>
+            <dt>City:</dt><dd id="ip-city">—</dd>
+            <dt>Postal:</dt><dd id="ip-postal">—</dd>
+            <dt>Latitude:</dt><dd id="ip-lat">—</dd>
+            <dt>Longitude:</dt><dd id="ip-lon">—</dd>
+            <dt>ISP / Org:</dt><dd id="ip-org">—</dd>
+            <dt>ASN:</dt><dd id="ip-asn">—</dd>
+            <dt>IP Timezone:</dt><dd id="ip-tz">—</dd>
+            <dt>Timezone Match:</dt><dd id="ip-match">—</dd>
+            <dt>Precise GPS:</dt>
+            <dd><span id="op-geo">—</span> <button id="btn-geo" class="req-btn">Click to Request</button></dd>
+          </dl>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Best-effort with fallback: ipapi.co → ipwho.is → ipify. If all are blocked or offline, rows show "unavailable".</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 5: Storage & Capabilities + Permissions -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Storage &amp; Capabilities</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Cookies:</dt><dd id="st-cookies">—</dd>
+            <dt>Do Not Track:</dt><dd id="st-dnt">—</dd>
+            <dt>Global Privacy:</dt><dd id="st-gpc">—</dd>
+            <dt>Storage Quota:</dt><dd id="st-quota">—</dd>
+            <dt>Storage Used:</dt><dd id="st-usage">—</dd>
+            <dt>LocalStorage:</dt><dd id="st-local">—</dd>
+            <dt>SessionStorage:</dt><dd id="st-session">—</dd>
+            <dt>IndexedDB:</dt><dd id="st-idb">—</dd>
+            <dt>Cache API:</dt><dd id="st-cache">—</dd>
+            <dt>File System Access:</dt><dd id="st-fs">—</dd>
+            <dt>Service Worker:</dt><dd id="st-sw">—</dd>
+            <dt>Web Workers:</dt><dd id="st-ww">—</dd>
+            <dt>Shared Workers:</dt><dd id="st-sww">—</dd>
+            <dt>WebAssembly:</dt><dd id="st-wasm">—</dd>
+            <dt>WebRTC:</dt><dd id="st-webrtc">—</dd>
+            <dt>WebTransport:</dt><dd id="st-wt">—</dd>
+            <dt>WebCodecs:</dt><dd id="st-wc">—</dd>
+            <dt>WebXR:</dt><dd id="st-webxr">—</dd>
+            <dt>Bluetooth:</dt><dd id="st-bt">—</dd>
+            <dt>USB:</dt><dd id="st-usb">—</dd>
+            <dt>Serial:</dt><dd id="st-serial">—</dd>
+            <dt>HID:</dt><dd id="st-hid">—</dd>
+            <dt>NFC:</dt><dd id="st-nfc">—</dd>
+            <dt>Gamepad API:</dt><dd id="st-gamepad">—</dd>
+            <dt>Geolocation:</dt><dd id="st-geo">—</dd>
+            <dt>Clipboard API:</dt><dd id="st-clip">—</dd>
+            <dt>Notifications:</dt><dd id="st-notif">—</dd>
+            <dt>Wake Lock:</dt><dd id="st-wake">—</dd>
+            <dt>Share API:</dt><dd id="st-share">—</dd>
+            <dt>Payment API:</dt><dd id="st-pay">—</dd>
+            <dt>Credentials API:</dt><dd id="st-cred">—</dd>
+            <dt>Media Devices:</dt><dd id="st-media">—</dd>
+            <dt>Compression Streams:</dt><dd id="st-comp">—</dd>
+            <dt>Broadcast Channel:</dt><dd id="st-bc">—</dd>
+            <dt class="pt-2 border-t border-gray-200 dark:border-neutral-800">Notification Permission:</dt>
+            <dd class="pt-2 border-t border-gray-200 dark:border-neutral-800"><span id="op-notif">—</span> <button id="btn-notif" class="req-btn">Click to Request</button></dd>
+            <dt>Clipboard Contents:</dt>
+            <dd><span id="op-clip">—</span> <button id="btn-clip" class="req-btn">Click to Request</button></dd>
+            <dt>Storage Access:</dt>
+            <dd><span id="op-storage">—</span> <button id="btn-storage" class="req-btn">Click to Request</button></dd>
+            <dt>Persistent Storage:</dt>
+            <dd><span id="op-persist">—</span> <button id="btn-persist" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Permissions</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv" id="perm-list">
+            <dt>Loading…</dt><dd>—</dd>
+          </dl>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Current status only — no prompts triggered.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 6: WebGL Details + Audio -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">WebGL / WebGPU Details</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>WebGL:</dt><dd id="gl-version">—</dd>
+            <dt>Shading Language:</dt><dd id="gl-glsl">—</dd>
+            <dt>Max Texture Size:</dt><dd id="gl-maxtex">—</dd>
+            <dt>Max Cube Map:</dt><dd id="gl-maxcube">—</dd>
+            <dt>Max Viewport:</dt><dd id="gl-maxvp">—</dd>
+            <dt>Max Vertex Attribs:</dt><dd id="gl-maxva">—</dd>
+            <dt>Max Anisotropy:</dt><dd id="gl-aniso">—</dd>
+            <dt>Antialias:</dt><dd id="gl-aa">—</dd>
+            <dt>Extensions:</dt><dd id="gl-ext-count">—</dd>
+            <dt>WebGPU:</dt><dd id="gl-webgpu">—</dd>
+            <dt>WebGPU Features:</dt><dd id="gl-webgpu-feats" class="text-xs">—</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Audio</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Sample Rate:</dt><dd id="au-sr">—</dd>
+            <dt>Base Latency:</dt><dd id="au-baselat">—</dd>
+            <dt>Output Latency:</dt><dd id="au-outlat">—</dd>
+            <dt>Max Channel Count:</dt><dd id="au-maxch">—</dd>
+            <dt>State:</dt><dd id="au-state">—</dd>
+            <dt>Speech Synthesis:</dt><dd id="au-synth">—</dd>
+            <dt>Speech Recognition:</dt><dd id="au-recog">—</dd>
+            <dt>Voices Available:</dt><dd id="au-voices">—</dd>
+            <dt>Audio Inputs:</dt><dd id="md-audio-in">—</dd>
+            <dt>Audio Outputs:</dt><dd id="md-audio-out">—</dd>
+            <dt>Video Inputs:</dt><dd id="md-video">—</dd>
+            <dt>Picture-in-Picture:</dt><dd id="md-pip">—</dd>
+            <dt>Screen Capture:</dt><dd id="md-getdisplay">—</dd>
+            <dt class="pt-2 border-t border-gray-200 dark:border-neutral-800">Camera / Mic Details:</dt>
+            <dd class="pt-2 border-t border-gray-200 dark:border-neutral-800">
+              <button id="btn-media" class="req-btn">Click to Request</button>
+              <button id="btn-test-camera" class="test-btn">Test Camera</button>
+              <button id="btn-test-mic" class="test-btn">Test Microphone</button>
+            </dd>
+          </dl>
+          <div id="op-media" class="mt-3 text-xs space-y-2"></div>
+          <dl class="kv mt-3">
+            <dt>MIDI Devices:</dt>
+            <dd><span id="op-midi">—</span> <button id="btn-midi" class="req-btn">Click to Request</button></dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 7: Codecs & DRM + Sensors -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Codecs &amp; DRM</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>H.264:</dt><dd id="cd-h264">—</dd>
+            <dt>H.265 / HEVC:</dt><dd id="cd-h265">—</dd>
+            <dt>VP8:</dt><dd id="cd-vp8">—</dd>
+            <dt>VP9:</dt><dd id="cd-vp9">—</dd>
+            <dt>AV1:</dt><dd id="cd-av1">—</dd>
+            <dt>Dolby Vision:</dt><dd id="cd-dv">—</dd>
+            <dt>AAC:</dt><dd id="cd-aac">—</dd>
+            <dt>Opus:</dt><dd id="cd-opus">—</dd>
+            <dt>FLAC:</dt><dd id="cd-flac">—</dd>
+            <dt>Dolby AC-3:</dt><dd id="cd-ac3">—</dd>
+            <dt>Dolby E-AC-3:</dt><dd id="cd-eac3">—</dd>
+            <dt class="pt-2 border-t border-gray-200 dark:border-neutral-800">Widevine:</dt><dd class="pt-2 border-t border-gray-200 dark:border-neutral-800" id="cd-widevine">—</dd>
+            <dt>PlayReady:</dt><dd id="cd-playready">—</dd>
+            <dt>FairPlay:</dt><dd id="cd-fairplay">—</dd>
+            <dt>ClearKey:</dt><dd id="cd-clearkey">—</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Sensors &amp; Plugins</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Accelerometer:</dt><dd id="sn-accel">—</dd>
+            <dt>Gyroscope:</dt><dd id="sn-gyro">—</dd>
+            <dt>Magnetometer:</dt><dd id="sn-mag">—</dd>
+            <dt>Ambient Light:</dt><dd id="sn-light">—</dd>
+            <dt>Device Orientation:</dt><dd id="sn-orient">—</dd>
+            <dt>Device Motion:</dt><dd id="sn-motion">—</dd>
+            <dt>Vibration:</dt><dd id="sn-vibrate">—</dd>
+            <dt>Live Motion Data:</dt>
+            <dd><span id="op-motion">—</span> <button id="btn-motion" class="req-btn">Click to Request</button></dd>
+            <dt>Ambient Light Level:</dt>
+            <dd><span id="op-light">—</span> <button id="btn-light" class="req-btn">Click to Request</button></dd>
+            <dt>Plugin Count:</dt><dd id="sn-plugin-count">—</dd>
+            <dt>Plugins:</dt><dd id="sn-plugins" class="text-xs">—</dd>
+            <dt>MIME Types:</dt><dd id="sn-mime" class="text-xs">—</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 8: Fonts + Performance -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Installed Fonts</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <p class="mb-2"><span class="text-gray-500 dark:text-gray-400">Detected:</span> <span id="fo-count" class="font-medium">—</span> <span class="text-gray-500 dark:text-gray-400">of probed</span></p>
+          <div id="fo-list" class="text-xs leading-relaxed max-h-40 overflow-auto">—</div>
+          <dl class="kv mt-3 pt-3 border-t border-gray-200 dark:border-neutral-800">
+            <dt>Full System Fonts:</dt>
+            <dd><span id="op-fonts">—</span> <button id="btn-fonts" class="req-btn">Click to Request</button></dd>
+          </dl>
+          <div id="op-fonts-list" class="text-xs leading-relaxed max-h-40 overflow-auto mt-2"></div>
+        </div>
+      </section>
+
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Performance Timing</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>DNS Lookup:</dt><dd id="pf-dns">—</dd>
+            <dt>TCP Connect:</dt><dd id="pf-tcp">—</dd>
+            <dt>TLS Handshake:</dt><dd id="pf-tls">—</dd>
+            <dt>Request:</dt><dd id="pf-req">—</dd>
+            <dt>Response (TTFB):</dt><dd id="pf-ttfb">—</dd>
+            <dt>DOM Interactive:</dt><dd id="pf-dom">—</dd>
+            <dt>DOM Complete:</dt><dd id="pf-domc">—</dd>
+            <dt>Load Event:</dt><dd id="pf-load">—</dd>
+            <dt>Transfer Size:</dt><dd id="pf-size">—</dd>
+            <dt>Encoded Body Size:</dt><dd id="pf-enc">—</dd>
+            <dt>Decoded Body Size:</dt><dd id="pf-dec">—</dd>
+            <dt>Redirect Count:</dt><dd id="pf-redir">—</dd>
+            <dt>Nav Type:</dt><dd id="pf-navtype">—</dd>
+            <dt>Protocol:</dt><dd id="pf-proto">—</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 9: Device Fingerprint (full width but stylized as one card) -->
+    <div class="grid grid-cols-1 gap-3 sm:gap-6 mb-3 sm:mb-6">
+      <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Device Fingerprint</h2>
+        <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800">
+          <dl class="kv">
+            <dt>Canvas Hash:</dt><dd id="fp-canvas">—</dd>
+            <dt>WebGL Hash:</dt><dd id="fp-webgl">—</dd>
+            <dt>Audio Hash:</dt><dd id="fp-audio">—</dd>
+            <dt>Fonts Hash:</dt><dd id="fp-fonts">—</dd>
+            <dt>Combined ID:</dt><dd id="fp-combined" class="font-mono text-xs">—</dd>
+          </dl>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Hashes are stable per browser/device — the same values sites use to fingerprint you.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Giant JSON dump -->
+    <section class="card bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-sm">
+      <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <h2 class="text-lg font-semibold">All Details (JSON)</h2>
+        <div class="flex gap-2 flex-wrap">
+          <button id="json-copy" class="action-btn" data-target="json-output" data-filename="alldevicedata.json">Copy</button>
+          <button id="json-download" class="action-btn" data-target="json-output" data-filename="alldevicedata.json">Download</button>
+        </div>
+      </div>
+      <div class="inner bg-white dark:bg-neutral-950/60 border border-gray-200 dark:border-neutral-800 max-h-96 overflow-auto">
+<pre class="text-xs sm:text-sm leading-relaxed"><code id="json-output">Loading…</code></pre>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Test modal (hidden by default) -->
+  <div id="test-modal" class="modal-backdrop" style="display:none;">
+    <div class="modal-card">
+      <div class="flex items-center gap-3 flex-wrap mb-2">
+        <h3 id="test-modal-title" class="text-xl font-bold">&lt;Camera&gt;</h3>
+        <select id="test-modal-select" class="modal-select"></select>
+      </div>
+      <div id="test-modal-preview" class="preview-box">
+        <span class="text-gray-500 text-sm p-4">Select a device to preview…</span>
+      </div>
+      <div id="test-modal-info" class="text-xs text-gray-500 dark:text-gray-400 mt-3"></div>
+      <div class="flex justify-end mt-6">
+        <button id="test-modal-done" class="test-btn-lg">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (async function () {
+      // ============================================================
+      // OS detection — defined FIRST so all handlers can use it
+      // ============================================================
+      const IS_MOBILE_OS = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+                          || (navigator.userAgentData && navigator.userAgentData.mobile);
+      const IS_ANDROID = /Android/i.test(navigator.userAgent);
+      const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      console.log('[Robo OS detect]', { mobile: IS_MOBILE_OS, android: IS_ANDROID, ios: IS_IOS, ua: navigator.userAgent });
+
+      // Build the correct getUserMedia constraint for the platform + kind.
+      // Mobile: single-kind only (combined double-prompts fail on Android).
+      // Desktop: combined for unified permission prompt + label unlocking.
+      function makeGumConstraints(kind) {
+        if (IS_MOBILE_OS) {
+          return kind === 'video' ? { video: true } : { audio: true };
+        }
+        return { audio: true, video: true };
+      }
+
+      // If anything in this IIFE throws, surface it as a visible banner instead of
+      // leaving the page silently blank.
+      try {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v ?? '—').toString(); };
+      const yn = (b) => (b === true ? 'yes' : b === false ? 'no' : (b ?? 'unknown'));
+      const mm = (q) => window.matchMedia(q).matches;
+      const has = (name) => name in window || name in navigator;
+      const fmtBytes = (b) => {
+        if (b == null || isNaN(b)) return 'unknown';
+        const units = ['B','KB','MB','GB','TB']; let i = 0;
+        while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+        return b.toFixed(2) + ' ' + units[i];
+      };
+      const fmtMs = (n) => (n == null || isNaN(n) || n < 0) ? 'unknown' : Math.round(n) + ' ms';
+
+      // Hash helper (SHA-256 → short hex)
+      async function sha256(str) {
+        try {
+          const buf = new TextEncoder().encode(str);
+          const digest = await crypto.subtle.digest('SHA-256', buf);
+          return Array.from(new Uint8Array(digest)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch { return 'unavailable'; }
+      }
+
+      const ua = navigator.userAgent || '';
+      const platform = navigator.platform || '';
+      const language = navigator.language || 'unknown';
+      const languages = Array.isArray(navigator.languages) ? navigator.languages : [language];
+
+      // ---------- OS detection ----------
+      let osName = 'Unknown', osVersion = '';
+      if (/Windows NT/i.test(ua)) {
+        osName = 'Windows';
+        const m = ua.match(/Windows NT ([\d.]+)/i);
+        const map = { '10.0': '10/11', '6.3': '8.1', '6.2': '8', '6.1': '7', '6.0': 'Vista', '5.1': 'XP' };
+        if (m) osVersion = map[m[1]] || m[1];
+      } else if (/Android/i.test(ua)) { osName = 'Android'; const m = ua.match(/Android ([\d\.]+)/i); if (m) osVersion = m[1]; }
+      else if (/iPhone|iPad|iPod/i.test(ua)) { osName = /iPad/i.test(ua) ? 'iPadOS' : 'iOS'; const m = ua.match(/OS ([\d_]+) like Mac OS X/i); if (m) osVersion = m[1].replace(/_/g, '.'); }
+      else if (/Mac OS X|Macintosh/i.test(ua)) { osName = 'macOS'; const m = ua.match(/Mac OS X ([\d_\.]+)/i); if (m) osVersion = m[1].replace(/_/g, '.'); }
+      else if (/CrOS/i.test(ua)) { osName = 'ChromeOS'; }
+      else if (/Linux/i.test(ua)) { osName = 'Linux'; }
+
+      // ---------- Architecture ----------
+      let arch = 'unknown', bitness = 'unknown';
+      if (/x86_64|Win64|WOW64|x64/i.test(ua)) { arch = 'x86_64'; bitness = '64'; }
+      else if (/x86|i686|i386/i.test(ua)) { arch = 'x86'; bitness = '32'; }
+      else if (/arm64|aarch64/i.test(ua)) { arch = 'arm64'; bitness = '64'; }
+      else if (/arm/i.test(ua)) { arch = 'arm'; bitness = '32'; }
+
+      // ---------- UA-CH ----------
+      let uaData = null;
+      if (navigator.userAgentData) {
+        try {
+          const highEntropy = await navigator.userAgentData.getHighEntropyValues([
+            'architecture','bitness','model','platform','platformVersion',
+            'uaFullVersion','fullVersionList','wow64','formFactor','formFactors'
+          ]);
+          uaData = { mobile: navigator.userAgentData.mobile, brands: navigator.userAgentData.brands, ...highEntropy };
+          if (highEntropy.platform) osName = highEntropy.platform;
+          if (highEntropy.platformVersion) osVersion = highEntropy.platformVersion;
+          if (highEntropy.architecture) arch = highEntropy.architecture + (highEntropy.bitness ? '_' + highEntropy.bitness : '');
+          if (highEntropy.bitness) bitness = highEntropy.bitness;
+        } catch (e) {}
+      }
+
+      const isMobile = (uaData && uaData.mobile) || /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+
+      // ---------- Device heuristics ----------
+      let deviceType = isMobile ? 'Mobile' : 'Desktop';
+      if (/Tablet|iPad/i.test(ua)) deviceType = 'Tablet';
+      else if (/TV|SmartTV|GoogleTV|HbbTV/i.test(ua)) deviceType = 'TV';
+      else if ((uaData && uaData.formFactor === 'XR') || /VR|Oculus|Quest/i.test(ua)) deviceType = 'XR / VR';
+      else if (isMobile && !/Tablet|iPad/i.test(ua)) deviceType = 'Phone';
+
+      let deviceVendor = 'unknown', deviceModel = (uaData && uaData.model) || '';
+      if (/iPhone/i.test(ua)) { deviceVendor = 'Apple'; deviceModel ||= 'iPhone'; }
+      else if (/iPad/i.test(ua)) { deviceVendor = 'Apple'; deviceModel ||= 'iPad'; }
+      else if (/Macintosh|Mac OS X/i.test(ua)) { deviceVendor = 'Apple'; deviceModel ||= 'Mac'; }
+      else if (/Samsung|SM-/i.test(ua)) { deviceVendor = 'Samsung'; }
+      else if (/Pixel/i.test(ua)) { deviceVendor = 'Google'; deviceModel ||= (ua.match(/Pixel[\s\w]*/i) || [''])[0]; }
+      else if (/Huawei/i.test(ua)) { deviceVendor = 'Huawei'; }
+      else if (/Xiaomi|Redmi/i.test(ua)) { deviceVendor = 'Xiaomi'; }
+      else if (/OnePlus/i.test(ua)) { deviceVendor = 'OnePlus'; }
+      else if (/Motorola|Moto/i.test(ua)) { deviceVendor = 'Motorola'; }
+      else if (/Windows/i.test(ua)) { deviceVendor = 'PC'; deviceModel ||= 'Windows PC'; }
+      else if (/Linux/i.test(ua)) { deviceVendor = 'PC'; deviceModel ||= 'Linux PC'; }
+
+      // ---------- Browser detection ----------
+      let brName = 'Unknown', brVersion = '', brEngine = 'Unknown';
+      if (/Edg\//i.test(ua)) { brName = 'Microsoft Edge'; brVersion = (ua.match(/Edg\/([\d\.]+)/i) || [])[1] || ''; }
+      else if (/OPR\/|Opera/i.test(ua)) { brName = 'Opera'; brVersion = (ua.match(/(?:OPR|Opera)\/([\d\.]+)/i) || [])[1] || ''; }
+      else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) { brName = 'Chrome'; brVersion = (ua.match(/Chrome\/([\d\.]+)/i) || [])[1] || ''; }
+      else if (/Firefox\//i.test(ua)) { brName = 'Firefox'; brVersion = (ua.match(/Firefox\/([\d\.]+)/i) || [])[1] || ''; }
+      else if (/Safari\//i.test(ua) && /Version\//i.test(ua)) { brName = 'Safari'; brVersion = (ua.match(/Version\/([\d\.]+)/i) || [])[1] || ''; }
+
+      let brFullVersion = brVersion;
+      if (uaData) {
+        const list = uaData.fullVersionList || uaData.brands || [];
+        const primary = list.find(b => !/Not.?A.?Brand|Chromium/i.test(b.brand)) || list[0];
+        if (primary) {
+          brName = primary.brand || brName;
+          brFullVersion = primary.version || uaData.uaFullVersion || brFullVersion;
+          brVersion = brFullVersion.split('.')[0] + '.0';
+        }
+      }
+      if (/Gecko\/\d/i.test(ua)) brEngine = 'Gecko';
+      else if (/AppleWebKit/i.test(ua)) brEngine = /Chrome|Chromium|Edg|OPR/i.test(ua) ? 'Blink' : 'WebKit';
+      else if (/Trident/i.test(ua)) brEngine = 'Trident';
+
+      // ---------- Accurate UA ----------
+      function buildAccurateUA() {
+        if (!uaData) return ua;
+        const p = uaData.platform || osName || 'Unknown';
+        const pv = uaData.platformVersion || '';
+        const archStr = uaData.architecture ? (uaData.architecture + (uaData.bitness ? '_' + uaData.bitness : '')) : arch;
+        const model = uaData.model || '';
+        let token;
+        if (/Windows/i.test(p)) token = `Windows NT ${pv || '10.0'}; ${uaData.architecture==='arm'&&uaData.bitness==='64' ? 'ARM64' : (uaData.bitness==='64' ? 'Win64; x64' : 'Win32')}`;
+        else if (/mac/i.test(p)) token = `Macintosh; ${uaData.architecture==='arm' ? 'ARM' : 'Intel'} Mac OS X ${(pv||'').replace(/\./g,'_')}`;
+        else if (/Android/i.test(p)) token = `Linux; Android ${pv}${model ? '; '+model : ''}`;
+        else if (/iOS|iPhone|iPad/i.test(p)) token = `${/iPad/i.test(model)?'iPad':'iPhone'}; CPU iPhone OS ${(pv||'').replace(/\./g,'_')} like Mac OS X`;
+        else if (/Chrom(e )?OS|CrOS/i.test(p)) token = `X11; CrOS ${archStr} ${pv}`;
+        else if (/Linux/i.test(p)) token = `X11; Linux ${archStr}`;
+        else token = `${p} ${pv} ${archStr}`.trim();
+        const list = uaData.fullVersionList || uaData.brands || [];
+        const primary = list.find(b => !/Not.?A.?Brand|Chromium/i.test(b.brand)) || list[0];
+        const fullVer = (primary && (primary.version || uaData.uaFullVersion)) || uaData.uaFullVersion || brVersion || '';
+        const primaryName = (primary && primary.brand) || brName;
+        const mobileToken = uaData.mobile ? 'Mobile ' : '';
+        return `Mozilla/5.0 (${token}) AppleWebKit/537.36 (KHTML, like Gecko) ${primaryName}/${fullVer} ${mobileToken}Safari/537.36`.replace(/\s+/g,' ').trim();
+      }
+      const accurateUA = buildAccurateUA();
+
+      // ---------- Keyboard layout ----------
+      let keyboardLayout = 'unavailable';
+      if (navigator.keyboard && navigator.keyboard.getLayoutMap) {
+        try {
+          const m = await navigator.keyboard.getLayoutMap();
+          keyboardLayout = `${m.size} keys mapped (e.g. KeyQ→${m.get('KeyQ')||'?'})`;
+        } catch (e) {}
+      }
+
+      // ---------- GPU / WebGL ----------
+      let gpuVendor = 'unknown', gpuRenderer = 'unknown';
+      let glDetails = { version: 'no', glsl: 'unknown', maxTex: 'unknown', maxCube: 'unknown', maxVp: 'unknown', maxVA: 'unknown', aniso: 'unknown', aa: 'unknown', extCount: 0, extensions: [] };
+      let webglSample = '';
+      try {
+        const canvas = document.createElement('canvas');
+        const gl2 = canvas.getContext('webgl2');
+        const gl = gl2 || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        glDetails.version = gl2 ? 'WebGL 2' : (gl ? 'WebGL 1' : 'no');
+        if (gl) {
+          const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+          if (dbg) { gpuVendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || gpuVendor; gpuRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || gpuRenderer; }
+          else { gpuVendor = gl.getParameter(gl.VENDOR); gpuRenderer = gl.getParameter(gl.RENDERER); }
+          glDetails.glsl = gl.getParameter(gl.SHADING_LANGUAGE_VERSION) || 'unknown';
+          glDetails.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+          glDetails.maxCube = gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE);
+          const vp = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+          glDetails.maxVp = vp ? `${vp[0]} × ${vp[1]}` : 'unknown';
+          glDetails.maxVA = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+          const anisoExt = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+          glDetails.aniso = anisoExt ? gl.getParameter(anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) + 'x' : 'unsupported';
+          const attribs = gl.getContextAttributes();
+          glDetails.aa = attribs && attribs.antialias ? 'yes' : 'no';
+          const exts = gl.getSupportedExtensions() || [];
+          glDetails.extCount = exts.length;
+          glDetails.extensions = exts;
+          webglSample = `${gpuVendor}|${gpuRenderer}|${glDetails.glsl}|${glDetails.maxTex}|${exts.join(',')}`;
+        }
+      } catch (e) {}
+
+      // ---------- WebGPU ----------
+      let webgpuInfo = 'no', webgpuFeats = [];
+      if (navigator.gpu) {
+        webgpuInfo = 'yes';
+        try {
+          const adapter = await navigator.gpu.requestAdapter();
+          if (adapter) {
+            const info = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : null);
+            if (info) webgpuInfo = [info.vendor, info.architecture, info.description].filter(Boolean).join(' / ') || 'yes';
+            if (adapter.features) webgpuFeats = Array.from(adapter.features);
+          }
+        } catch (e) {}
+      }
+
+      // ---------- Battery ----------
+      let battery = null;
+      if (navigator.getBattery) {
+        try {
+          const b = await navigator.getBattery();
+          const fmtSec = (s) => (s === Infinity ? '∞' : (s == null ? 'unknown' : Math.round(s/60) + ' min'));
+          battery = { level: Math.round(b.level*100)+'%', charging: b.charging, chargingTime: fmtSec(b.chargingTime), dischargingTime: fmtSec(b.dischargingTime) };
+        } catch (e) {}
+      }
+
+      // ---------- Network ----------
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+      const network = {
+        online: navigator.onLine,
+        type: conn?.type || 'unknown',
+        effectiveType: conn?.effectiveType || 'unknown',
+        downlink: conn?.downlink != null ? conn.downlink + ' Mbps' : 'unknown',
+        downlinkMax: conn?.downlinkMax != null ? conn.downlinkMax + ' Mbps' : 'unknown',
+        rtt: conn?.rtt != null ? conn.rtt + ' ms' : 'unknown',
+        saveData: conn?.saveData ?? false,
+      };
+
+      // ---------- Public IP + geolocation (multi-provider fallback) ----------
+      // Normalize each provider's response shape to a common object:
+      // { ip, country_name, country_code, region, city, postal, latitude, longitude, org, asn, timezone }
+      const ipProviders = [
+        {
+          name: 'ipapi.co',
+          url: 'https://ipapi.co/json/',
+          parse: (j) => j && j.ip && !j.error ? {
+            ip: j.ip,
+            country_name: j.country_name, country_code: j.country_code || j.country,
+            region: j.region, city: j.city, postal: j.postal,
+            latitude: j.latitude, longitude: j.longitude,
+            org: j.org, asn: j.asn, timezone: j.timezone,
+          } : null,
+        },
+        {
+          name: 'ipwho.is',
+          url: 'https://ipwho.is/',
+          parse: (j) => j && j.success !== false && j.ip ? {
+            ip: j.ip,
+            country_name: j.country, country_code: j.country_code,
+            region: j.region, city: j.city, postal: j.postal,
+            latitude: j.latitude, longitude: j.longitude,
+            org: j.connection?.org || j.connection?.isp, asn: j.connection?.asn ? 'AS' + j.connection.asn : null,
+            timezone: j.timezone?.id || j.timezone,
+          } : null,
+        },
+        {
+          name: 'ipify',
+          url: 'https://api.ipify.org?format=json',
+          parse: (j) => j && j.ip ? { ip: j.ip } : null,   // IP only, no geo
+        },
+      ];
+
+      async function fetchIpInfo() {
+        for (const p of ipProviders) {
+          try {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), 4000);
+            const r = await fetch(p.url, { signal: ctrl.signal, cache: 'no-store' });
+            if (!r.ok) continue;
+            const j = await r.json();
+            const norm = p.parse(j);
+            if (norm && norm.ip) { norm._source = p.name; return norm; }
+          } catch (e) { /* try next */ }
+        }
+        return null;
+      }
+
+      const ipInfo = await fetchIpInfo();
+      const publicIP = ipInfo?.ip || 'unavailable';
+      const ipGeo = (ipInfo && (ipInfo.country_name || ipInfo.city || ipInfo.latitude != null)) ? ipInfo : null;
+
+      // ---------- Storage estimate ----------
+      let storage = { quota: 'unknown', usage: 'unknown' };
+      if (navigator.storage?.estimate) {
+        try { const est = await navigator.storage.estimate(); storage = { quota: fmtBytes(est.quota), usage: fmtBytes(est.usage) }; } catch (e) {}
+      }
+
+      // ---------- Display / preferences ----------
+      const colorScheme = mm('(prefers-color-scheme: dark)') ? 'dark' : 'light';
+      const reducedMotion = mm('(prefers-reduced-motion: reduce)');
+      const contrastPref = mm('(prefers-contrast: more)') ? 'more' : mm('(prefers-contrast: less)') ? 'less' : 'no-preference';
+      const forcedColors = mm('(forced-colors: active)') ? 'active' : 'none';
+      const colorGamut = mm('(color-gamut: rec2020)') ? 'rec2020' : mm('(color-gamut: p3)') ? 'p3' : mm('(color-gamut: srgb)') ? 'sRGB' : 'unknown';
+      const dynamicRange = mm('(dynamic-range: high)') ? 'HDR' : 'SDR';
+      const refreshRate = await new Promise((resolve) => {
+        let count = 0, start = 0;
+        function step(t) { if (!start) start = t; count++; if (t - start >= 500) resolve(Math.round((count*1000)/(t-start)) + ' Hz'); else requestAnimationFrame(step); }
+        requestAnimationFrame(step);
+        setTimeout(() => resolve('unknown'), 1200);
+      });
+
+      // ---------- Locale ----------
+      const dtOpts = Intl.DateTimeFormat().resolvedOptions();
+      const nfOpts = Intl.NumberFormat().resolvedOptions();
+      let firstDayOfWeek = 'unknown';
+      try { const loc = new Intl.Locale(navigator.language); firstDayOfWeek = (loc.weekInfo || (loc.getWeekInfo && loc.getWeekInfo()) || {}).firstDay ?? 'unknown'; } catch (e) {}
+
+      // ---------- Media devices ----------
+      let mediaCounts = { audioIn: 0, audioOut: 0, video: 0 };
+      if (navigator.mediaDevices?.enumerateDevices) {
+        try { const devs = await navigator.mediaDevices.enumerateDevices();
+          for (const d of devs) { if (d.kind==='audioinput') mediaCounts.audioIn++; else if (d.kind==='audiooutput') mediaCounts.audioOut++; else if (d.kind==='videoinput') mediaCounts.video++; }
+        } catch (e) {}
+      }
+      const voices = ('speechSynthesis' in window) ? (window.speechSynthesis.getVoices() || []).length : 0;
+
+      // ---------- Audio context ----------
+      let audioInfo = { sampleRate: 'unavailable', baseLatency: 'unavailable', outputLatency: 'unavailable', maxCh: 'unavailable', state: 'unavailable' };
+      let audioFP = '';
+      try {
+        const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        const RT = window.AudioContext || window.webkitAudioContext;
+        if (RT) {
+          const ctx = new RT();
+          audioInfo.sampleRate = ctx.sampleRate + ' Hz';
+          audioInfo.baseLatency = ctx.baseLatency != null ? (ctx.baseLatency*1000).toFixed(2) + ' ms' : 'unknown';
+          audioInfo.outputLatency = ctx.outputLatency != null ? (ctx.outputLatency*1000).toFixed(2) + ' ms' : 'unknown';
+          audioInfo.maxCh = ctx.destination.maxChannelCount;
+          audioInfo.state = ctx.state;
+          ctx.close && ctx.close();
+        }
+        // Audio fingerprint
+        if (AC) {
+          const oc = new AC(1, 44100, 44100);
+          const osc = oc.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 10000;
+          const comp = oc.createDynamicsCompressor();
+          osc.connect(comp); comp.connect(oc.destination); osc.start(0);
+          const buf = await oc.startRendering();
+          let sum = 0; const data = buf.getChannelData(0);
+          for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
+          audioFP = sum.toString();
+        }
+      } catch (e) {}
+
+      // ---------- Codecs ----------
+      const video = document.createElement('video');
+      const cp = (t) => video.canPlayType(t) || 'no';
+      const codecs = {
+        h264: cp('video/mp4; codecs="avc1.42E01E"'),
+        h265: cp('video/mp4; codecs="hev1.1.6.L93.B0"') || cp('video/mp4; codecs="hvc1.1.6.L93.B0"'),
+        vp8: cp('video/webm; codecs="vp8"'),
+        vp9: cp('video/webm; codecs="vp9"'),
+        av1: cp('video/mp4; codecs="av01.0.05M.08"'),
+        dolbyVision: cp('video/mp4; codecs="dvh1.05.06"'),
+        aac: cp('audio/mp4; codecs="mp4a.40.2"'),
+        opus: cp('audio/webm; codecs="opus"'),
+        flac: cp('audio/flac'),
+        ac3: cp('audio/mp4; codecs="ac-3"'),
+        eac3: cp('audio/mp4; codecs="ec-3"'),
+      };
+
+      // ---------- DRM (EME) ----------
+      async function checkKS(ks) {
+        if (!navigator.requestMediaKeySystemAccess) return 'unavailable';
+        try {
+          await navigator.requestMediaKeySystemAccess(ks, [{ initDataTypes:['cenc'], videoCapabilities:[{ contentType:'video/mp4;codecs="avc1.42E01E"'}] }]);
+          return 'supported';
+        } catch { return 'no'; }
+      }
+      const drm = {
+        widevine: await checkKS('com.widevine.alpha'),
+        playready: await checkKS('com.microsoft.playready'),
+        fairplay: await checkKS('com.apple.fps.1_0'),
+        clearkey: await checkKS('org.w3.clearkey'),
+      };
+
+      // ---------- Fonts ----------
+      const fontProbes = [
+        'Arial','Arial Black','Arial Narrow','Arial Rounded MT Bold','Bahnschrift','Baskerville','Bodoni MT','Bookman Old Style','Brush Script MT',
+        'Calibri','Cambria','Candara','Century Gothic','Comic Sans MS','Consolas','Constantia','Copperplate','Corbel','Courier','Courier New',
+        'Didot','Franklin Gothic Medium','Futura','Garamond','Geneva','Georgia','Gill Sans','Helvetica','Helvetica Neue','Impact','Ink Free',
+        'Lucida Bright','Lucida Console','Lucida Handwriting','Lucida Sans','Lucida Sans Unicode','Menlo','Microsoft Sans Serif','Monaco','Monotype Corsiva',
+        'MS Gothic','MS PGothic','MS Sans Serif','MS Serif','MV Boli','Myriad Pro','Optima','Palatino','Palatino Linotype','Papyrus','Perpetua','Rockwell',
+        'Segoe Print','Segoe Script','Segoe UI','Segoe UI Emoji','Segoe UI Historic','Segoe UI Symbol','SimSun','Sitka','Snell Roundhand','Tahoma','Times',
+        'Times New Roman','Trebuchet MS','Verdana','Wingdings','Yu Gothic','Zapfino','Roboto','Noto Sans','Noto Serif','DejaVu Sans','DejaVu Serif','Ubuntu',
+        'Cantarell','Liberation Sans','Liberation Serif','Liberation Mono','FreeSans','FreeSerif','FreeMono','Apple Color Emoji','SF Pro','SF Mono','New York',
+        'PingFang SC','Hiragino Sans','Yu Mincho','Malgun Gothic','Nanum Gothic','Source Sans Pro','Source Serif Pro','Source Code Pro','Fira Sans','Fira Code',
+        'Inter','JetBrains Mono','IBM Plex Sans','IBM Plex Mono'
+      ];
+      const detectedFonts = (function detectFonts() {
+        const baseFonts = ['monospace','sans-serif','serif'];
+        const testStr = 'mmmmmmmmmmlli';
+        const testSize = '72px';
+        const body = document.body;
+        const span = document.createElement('span');
+        span.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;font-size:'+testSize+';';
+        span.textContent = testStr;
+        body.appendChild(span);
+        const defaults = {};
+        for (const b of baseFonts) { span.style.fontFamily = b; defaults[b] = { w: span.offsetWidth, h: span.offsetHeight }; }
+        const found = [];
+        for (const f of fontProbes) {
+          let detected = false;
+          for (const b of baseFonts) {
+            span.style.fontFamily = `"${f}",${b}`;
+            if (span.offsetWidth !== defaults[b].w || span.offsetHeight !== defaults[b].h) { detected = true; break; }
+          }
+          if (detected) found.push(f);
+        }
+        body.removeChild(span);
+        return found;
+      })();
+
+      // ---------- Permissions ----------
+      const permNames = ['geolocation','notifications','camera','microphone','clipboard-read','clipboard-write','persistent-storage','background-sync','midi','push','accelerometer','gyroscope','magnetometer','ambient-light-sensor','screen-wake-lock','payment-handler','local-fonts','window-management','storage-access'];
+      const perms = {};
+      if (navigator.permissions?.query) {
+        for (const n of permNames) {
+          try { const r = await navigator.permissions.query({ name: n }); perms[n] = r.state; }
+          catch { perms[n] = 'unavailable'; }
+        }
+      }
+
+      // ---------- Performance Timing ----------
+      const nav = performance.getEntriesByType('navigation')[0] || null;
+      const perfTime = nav ? {
+        dns: nav.domainLookupEnd - nav.domainLookupStart,
+        tcp: nav.connectEnd - nav.connectStart,
+        tls: nav.secureConnectionStart > 0 ? nav.connectEnd - nav.secureConnectionStart : null,
+        request: nav.responseStart - nav.requestStart,
+        ttfb: nav.responseStart - nav.startTime,
+        domInteractive: nav.domInteractive,
+        domComplete: nav.domComplete,
+        loadEvent: nav.loadEventEnd,
+        transferSize: nav.transferSize,
+        encoded: nav.encodedBodySize,
+        decoded: nav.decodedBodySize,
+        redirectCount: nav.redirectCount,
+        navType: nav.type,
+        protocol: nav.nextHopProtocol,
+      } : null;
+
+      // ---------- Canvas fingerprint ----------
+      let canvasSample = '';
+      try {
+        const c = document.createElement('canvas'); c.width = 280; c.height = 60;
+        const ctx = c.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = "14px 'Arial'";
+        ctx.fillStyle = '#f60'; ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069'; ctx.fillText('Robo Data Finder 🌐', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)'; ctx.fillText('Robo Data Finder 🌐', 4, 17);
+        canvasSample = c.toDataURL();
+      } catch {}
+
+      // ---------- Sensors & plugins ----------
+      const plugins = navigator.plugins ? Array.from(navigator.plugins).map(p => p.name) : [];
+      const mimeTypes = navigator.mimeTypes ? Array.from(navigator.mimeTypes).map(m => m.type) : [];
+      const sensors = {
+        accelerometer: has('Accelerometer'), gyroscope: has('Gyroscope'), magnetometer: has('Magnetometer'),
+        ambientLight: has('AmbientLightSensor'), orientation: 'DeviceOrientationEvent' in window,
+        motion: 'DeviceMotionEvent' in window, vibrate: 'vibrate' in navigator,
+      };
+
+      // ---------- Capabilities ----------
+      const caps = {
+        cookies: navigator.cookieEnabled,
+        doNotTrack: navigator.doNotTrack ?? window.doNotTrack ?? 'unspecified',
+        globalPrivacy: navigator.globalPrivacyControl ?? 'unspecified',
+        localStorage: (()=>{try{return 'localStorage' in window && !!window.localStorage;}catch{return false;}})(),
+        sessionStorage: (()=>{try{return 'sessionStorage' in window && !!window.sessionStorage;}catch{return false;}})(),
+        indexedDB: 'indexedDB' in window,
+        cacheAPI: 'caches' in window,
+        fileSystemAccess: 'showOpenFilePicker' in window,
+        serviceWorker: 'serviceWorker' in navigator,
+        webWorker: typeof Worker === 'function',
+        sharedWorker: typeof SharedWorker === 'function',
+        webAssembly: typeof WebAssembly === 'object',
+        webRTC: 'RTCPeerConnection' in window,
+        webTransport: 'WebTransport' in window,
+        webCodecs: 'VideoEncoder' in window,
+        webXR: 'xr' in navigator,
+        bluetooth: 'bluetooth' in navigator,
+        usb: 'usb' in navigator,
+        serial: 'serial' in navigator,
+        hid: 'hid' in navigator,
+        nfc: 'NDEFReader' in window,
+        gamepad: 'getGamepads' in navigator,
+        geolocation: 'geolocation' in navigator,
+        clipboard: !!(navigator.clipboard),
+        notifications: 'Notification' in window,
+        wakeLock: !!(navigator.wakeLock),
+        share: !!(navigator.share),
+        payment: 'PaymentRequest' in window,
+        credentials: !!(navigator.credentials),
+        mediaDevices: !!(navigator.mediaDevices),
+        pictureInPicture: 'pictureInPictureEnabled' in document,
+        screenCapture: !!(navigator.mediaDevices?.getDisplayMedia),
+        speechSynthesis: 'speechSynthesis' in window,
+        speechRecognition: 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window,
+        compressionStreams: 'CompressionStream' in window,
+        broadcastChannel: 'BroadcastChannel' in window,
+      };
+
+      // Autoplay policy
+      let autoplayPolicy = 'unknown';
+      if (navigator.getAutoplayPolicy) { try { autoplayPolicy = navigator.getAutoplayPolicy('mediaelement'); } catch {} }
+
+      // Memory
+      const mem = performance.memory || null;
+
+      // ---------- Fingerprint hashes ----------
+      const [fpCanvas, fpWebGL, fpAudio, fpFonts] = await Promise.all([
+        sha256(canvasSample), sha256(webglSample), sha256(audioFP), sha256(detectedFonts.join(','))
+      ]);
+      const fpCombined = await sha256([fpCanvas, fpWebGL, fpAudio, fpFonts, accurateUA, `${screen.width}x${screen.height}`, dtOpts.timeZone].join('|'));
+
+      // ============================================================
+      // POPULATE UI
+      // ============================================================
+
+      // Device
+      set('dv-type', deviceType); set('dv-vendor', deviceVendor); set('dv-model', deviceModel || 'unknown');
+      set('dv-form', (uaData && (uaData.formFactor || (uaData.formFactors && uaData.formFactors.join(', ')))) || (isMobile ? 'mobile' : 'desktop'));
+      set('dv-mobile', yn(isMobile));
+      set('dv-touch', yn('ontouchstart' in window || navigator.maxTouchPoints > 0));
+      set('dv-pointer', mm('(pointer: fine)') ? 'fine' : mm('(pointer: coarse)') ? 'coarse' : 'none');
+      set('dv-hover', mm('(hover: hover)') ? 'hover' : 'no-hover');
+      set('dv-vkbd', yn('virtualKeyboard' in navigator));
+      set('dv-keylayout', keyboardLayout);
+
+      // OS
+      set('os-detected', osName); set('os-version', osVersion || 'unknown');
+      set('os-platform', platform || osName); set('os-oscpu', navigator.oscpu || 'unavailable');
+      set('os-arch', arch); set('os-bitness', bitness); set('os-wow64', yn(uaData?.wow64));
+      set('os-language', language); set('os-languages', languages.join(', ')); set('os-mobile', yn(isMobile));
+
+      // Browser
+      set('br-name', brName); set('br-version', brVersion || 'unknown'); set('br-fullversion', brFullVersion || 'unknown');
+      set('br-engine', brEngine); set('br-vendor', navigator.vendor || 'unknown');
+      set('br-brands', uaData?.brands ? uaData.brands.map(b => `${b.brand} ${b.version}`).join(', ') : 'unknown');
+      set('br-product', navigator.product || 'unknown'); set('br-appname', navigator.appName || 'unknown');
+      set('br-appversion', navigator.appVersion || 'unknown'); set('br-build', navigator.buildID || 'unavailable');
+      set('br-webdriver', yn(navigator.webdriver));
+      set('br-java', yn(typeof navigator.javaEnabled === 'function' ? navigator.javaEnabled() : false));
+      set('br-autoplay', autoplayPolicy); set('br-pdf', yn(caps.pdfViewer ?? !!navigator.pdfViewerEnabled));
+      set('br-ua-accurate', accurateUA); set('br-ua', ua);
+
+      // Hardware
+      set('hw-cores', navigator.hardwareConcurrency ?? 'unknown');
+      set('hw-memory', navigator.deviceMemory != null ? navigator.deviceMemory + ' GB (approx)' : 'unknown');
+      set('hw-heap-limit', mem ? fmtBytes(mem.jsHeapSizeLimit) : 'unavailable');
+      set('hw-heap-total', mem ? fmtBytes(mem.totalJSHeapSize) : 'unavailable');
+      set('hw-heap-used', mem ? fmtBytes(mem.usedJSHeapSize) : 'unavailable');
+      set('hw-gpu-vendor', gpuVendor); set('hw-gpu-renderer', gpuRenderer);
+      set('hw-touch', navigator.maxTouchPoints ?? 0);
+      set('hw-battery', battery ? `${battery.level} ${battery.charging ? '(charging)' : '(on battery)'}` : 'unavailable');
+      set('hw-battery-charge', battery ? battery.chargingTime : 'unavailable');
+      set('hw-battery-discharge', battery ? battery.dischargingTime : 'unavailable');
+
+      // Display
+      set('dp-screen', `${screen.width} × ${screen.height}`);
+      set('dp-avail', `${screen.availWidth} × ${screen.availHeight}`);
+      set('dp-viewport', `${window.innerWidth} × ${window.innerHeight}`);
+      set('dp-dpr', window.devicePixelRatio);
+      set('dp-color', (screen.colorDepth || 'unknown') + '-bit');
+      set('dp-pxdepth', (screen.pixelDepth || 'unknown') + '-bit');
+      set('dp-orient', (screen.orientation?.type) || 'unknown');
+      set('dp-gamut', colorGamut); set('dp-hdr', dynamicRange);
+      set('dp-scheme', colorScheme); set('dp-motion', yn(reducedMotion));
+      set('dp-contrast', contrastPref); set('dp-forced', forcedColors); set('dp-refresh', refreshRate);
+
+      // Locale
+      set('lc-tz', dtOpts.timeZone);
+      const offsetMin = new Date().getTimezoneOffset();
+      const offH = Math.floor(Math.abs(offsetMin)/60), offM = Math.abs(offsetMin)%60;
+      set('lc-offset', `UTC${offsetMin<=0?'+':'-'}${String(offH).padStart(2,'0')}:${String(offM).padStart(2,'0')}`);
+      set('lc-locale', dtOpts.locale); set('lc-cal', dtOpts.calendar);
+      set('lc-num', dtOpts.numberingSystem); set('lc-hour', dtOpts.hourCycle || 'unknown');
+      set('lc-currency', nfOpts.currency || 'unknown'); set('lc-firstday', firstDayOfWeek);
+      set('lc-time', new Date().toLocaleString()); set('lc-loaded', new Date(performance.timeOrigin).toLocaleString());
+
+      // Network
+      set('nw-online', yn(network.online)); set('nw-type', network.type); set('nw-effective', network.effectiveType);
+      set('nw-downlink', network.downlink); set('nw-downmax', network.downlinkMax); set('nw-rtt', network.rtt);
+      set('nw-save', yn(network.saveData)); set('nw-protocol', location.protocol);
+      set('nw-host', location.host); set('nw-ip', publicIP);
+
+      // IP Geolocation
+      if (ipGeo) {
+        set('ip-country', ipGeo.country_name ? `${ipGeo.country_name}${ipGeo.country_code ? ' (' + ipGeo.country_code + ')' : ''}` : 'unknown');
+        set('ip-region', ipGeo.region || 'unknown'); set('ip-city', ipGeo.city || 'unknown');
+        set('ip-postal', ipGeo.postal || 'unknown');
+        set('ip-lat', ipGeo.latitude ?? 'unknown'); set('ip-lon', ipGeo.longitude ?? 'unknown');
+        set('ip-org', ipGeo.org || 'unknown'); set('ip-asn', ipGeo.asn || 'unknown');
+        set('ip-tz', ipGeo.timezone || 'unknown');
+        set('ip-match', ipGeo.timezone ? yn(ipGeo.timezone === dtOpts.timeZone) : 'unknown');
+      } else {
+        ['ip-country','ip-region','ip-city','ip-postal','ip-lat','ip-lon','ip-org','ip-asn','ip-tz','ip-match'].forEach(id => set(id, 'unavailable'));
+      }
+
+      // Storage & capabilities
+      set('st-cookies', yn(caps.cookies)); set('st-dnt', caps.doNotTrack); set('st-gpc', caps.globalPrivacy);
+      set('st-quota', storage.quota); set('st-usage', storage.usage);
+      set('st-local', yn(caps.localStorage)); set('st-session', yn(caps.sessionStorage));
+      set('st-idb', yn(caps.indexedDB)); set('st-cache', yn(caps.cacheAPI));
+      set('st-fs', yn(caps.fileSystemAccess)); set('st-sw', yn(caps.serviceWorker));
+      set('st-ww', yn(caps.webWorker)); set('st-sww', yn(caps.sharedWorker));
+      set('st-wasm', yn(caps.webAssembly)); set('st-webrtc', yn(caps.webRTC));
+      set('st-wt', yn(caps.webTransport)); set('st-wc', yn(caps.webCodecs));
+      set('st-webxr', yn(caps.webXR)); set('st-bt', yn(caps.bluetooth));
+      set('st-usb', yn(caps.usb)); set('st-serial', yn(caps.serial));
+      set('st-hid', yn(caps.hid)); set('st-nfc', yn(caps.nfc));
+      set('st-gamepad', yn(caps.gamepad)); set('st-geo', yn(caps.geolocation));
+      set('st-clip', yn(caps.clipboard)); set('st-notif', yn(caps.notifications));
+      set('st-wake', yn(caps.wakeLock)); set('st-share', yn(caps.share));
+      set('st-pay', yn(caps.payment)); set('st-cred', yn(caps.credentials));
+      set('st-media', yn(caps.mediaDevices)); set('st-comp', yn(caps.compressionStreams));
+      set('st-bc', yn(caps.broadcastChannel));
+
+      // Permissions
+      const permList = document.getElementById('perm-list');
+      permList.innerHTML = '';
+      for (const [k, v] of Object.entries(perms)) {
+        const dt = document.createElement('dt'); dt.textContent = k + ':';
+        const dd = document.createElement('dd'); dd.textContent = v;
+        permList.appendChild(dt); permList.appendChild(dd);
+      }
+      if (!Object.keys(perms).length) permList.innerHTML = '<dt>Permissions API:</dt><dd>unavailable</dd>';
+
+      // WebGL / WebGPU details
+      set('gl-version', glDetails.version); set('gl-glsl', glDetails.glsl);
+      set('gl-maxtex', glDetails.maxTex); set('gl-maxcube', glDetails.maxCube);
+      set('gl-maxvp', glDetails.maxVp); set('gl-maxva', glDetails.maxVA);
+      set('gl-aniso', glDetails.aniso); set('gl-aa', glDetails.aa);
+      set('gl-ext-count', glDetails.extCount);
+      set('gl-webgpu', webgpuInfo);
+      set('gl-webgpu-feats', webgpuFeats.length ? webgpuFeats.join(', ') : 'none');
+
+      // Audio
+      set('au-sr', audioInfo.sampleRate); set('au-baselat', audioInfo.baseLatency);
+      set('au-outlat', audioInfo.outputLatency); set('au-maxch', audioInfo.maxCh); set('au-state', audioInfo.state);
+      set('au-synth', yn(caps.speechSynthesis)); set('au-recog', yn(caps.speechRecognition));
+      set('au-voices', voices);
+      set('md-audio-in', mediaCounts.audioIn); set('md-audio-out', mediaCounts.audioOut); set('md-video', mediaCounts.video);
+      set('md-pip', yn(caps.pictureInPicture)); set('md-getdisplay', yn(caps.screenCapture));
+
+      // Codecs
+      set('cd-h264', codecs.h264); set('cd-h265', codecs.h265); set('cd-vp8', codecs.vp8);
+      set('cd-vp9', codecs.vp9); set('cd-av1', codecs.av1); set('cd-dv', codecs.dolbyVision);
+      set('cd-aac', codecs.aac); set('cd-opus', codecs.opus); set('cd-flac', codecs.flac);
+      set('cd-ac3', codecs.ac3); set('cd-eac3', codecs.eac3);
+      set('cd-widevine', drm.widevine); set('cd-playready', drm.playready);
+      set('cd-fairplay', drm.fairplay); set('cd-clearkey', drm.clearkey);
+
+      // Sensors & plugins
+      set('sn-accel', yn(sensors.accelerometer)); set('sn-gyro', yn(sensors.gyroscope));
+      set('sn-mag', yn(sensors.magnetometer)); set('sn-light', yn(sensors.ambientLight));
+      set('sn-orient', yn(sensors.orientation)); set('sn-motion', yn(sensors.motion));
+      set('sn-vibrate', yn(sensors.vibrate));
+      set('sn-plugin-count', plugins.length);
+      set('sn-plugins', plugins.length ? plugins.join(', ') : 'none');
+      set('sn-mime', mimeTypes.length ? mimeTypes.join(', ') : 'none');
+
+      // Fonts
+      set('fo-count', `${detectedFonts.length} / ${fontProbes.length}`);
+      document.getElementById('fo-list').textContent = detectedFonts.length ? detectedFonts.join(', ') : 'none detected';
+
+      // Performance
+      if (perfTime) {
+        set('pf-dns', fmtMs(perfTime.dns)); set('pf-tcp', fmtMs(perfTime.tcp));
+        set('pf-tls', perfTime.tls == null ? 'n/a' : fmtMs(perfTime.tls));
+        set('pf-req', fmtMs(perfTime.request)); set('pf-ttfb', fmtMs(perfTime.ttfb));
+        set('pf-dom', fmtMs(perfTime.domInteractive)); set('pf-domc', fmtMs(perfTime.domComplete));
+        set('pf-load', fmtMs(perfTime.loadEvent));
+        set('pf-size', fmtBytes(perfTime.transferSize)); set('pf-enc', fmtBytes(perfTime.encoded));
+        set('pf-dec', fmtBytes(perfTime.decoded));
+        set('pf-redir', perfTime.redirectCount); set('pf-navtype', perfTime.navType);
+        set('pf-proto', perfTime.protocol || 'unknown');
+      }
+
+      // Fingerprint
+      set('fp-canvas', fpCanvas); set('fp-webgl', fpWebGL);
+      set('fp-audio', fpAudio); set('fp-fonts', fpFonts); set('fp-combined', fpCombined);
+
+      // ============================================================
+      // OPT-IN PERMISSION BUTTONS
+      // ============================================================
+      function wireBtn(btnId, valueId, handler, { html = false, updatable = false } = {}) {
+        const btn = document.getElementById(btnId);
+        const val = document.getElementById(valueId);
+        if (!btn) return;
+
+        const render = (result) => {
+          if (!val) return;
+          if (html) val.innerHTML = result; else val.textContent = result;
+        };
+
+        const run = async (triggerBtn, initialLabel) => {
+          const isFirst = initialLabel === 'Click to Request';
+          // IMPORTANT for mobile: call handler() BEFORE mutating the button so that
+          // any getUserMedia/requestPermission call inside the handler runs in the
+          // same synchronous tick as the click. Android browsers strip user
+          // activation across microtasks/DOM writes, so button mutations first
+          // would break permission prompts.
+          let handlerPromise;
+          try { handlerPromise = handler(); }
+          catch (syncErr) { handlerPromise = Promise.reject(syncErr); }
+          triggerBtn.disabled = true;
+          triggerBtn.textContent = isFirst ? 'Requesting…' : 'Updating…';
+          triggerBtn.title = '';
+          try {
+            const result = await handlerPromise;
+            if (result === null || result === undefined) {
+              // No data returned — treat as soft failure, don't clobber good data on update
+              if (isFirst && val && !html) val.textContent = '—';
+              triggerBtn.disabled = false;
+              triggerBtn.textContent = isFirst ? initialLabel : 'Update';
+              return;
+            }
+            render(result);
+            if (isFirst) {
+              // First success: swap the request button for an Update button (if updatable)
+              const parent = triggerBtn.parentNode;
+              triggerBtn.remove();
+              if (updatable && parent) {
+                const upd = document.createElement('button');
+                upd.className = 'upd-btn';
+                upd.textContent = 'Update';
+                upd.addEventListener('click', () => run(upd, 'Update'));
+                // Insert into the label row (parent is <dd>), which for media/fonts is a separate
+                // <dd> that holds the request button — so append there. For inline rows it also
+                // appends after the <span>, which is what we want.
+                parent.appendChild(upd);
+              }
+            } else {
+              // Update success: keep the same Update button
+              triggerBtn.disabled = false;
+              triggerBtn.textContent = 'Update';
+            }
+          } catch (e) {
+            const msg = (e && (e.message || e.name)) || 'error';
+            if (isFirst) {
+              // First attempt failed — safe to overwrite placeholder
+              if (val && !html) val.textContent = 'denied: ' + msg;
+              triggerBtn.disabled = false;
+              triggerBtn.textContent = 'Try Again';
+            } else {
+              // Update failed — DO NOT clobber the good data already shown
+              triggerBtn.disabled = false;
+              triggerBtn.textContent = 'Update';
+              triggerBtn.title = 'Last update failed: ' + msg;
+              // Briefly flash the button so user notices
+              const orig = triggerBtn.style.background;
+              triggerBtn.style.background = 'rgb(239 68 68)';
+              setTimeout(() => { triggerBtn.style.background = orig; }, 1200);
+              console.warn('[Update failed]', valueId, e);
+            }
+          }
+        };
+
+        btn.addEventListener('click', () => run(btn, 'Click to Request'));
+      }
+
+      // ---- Precise GPS location ----
+      wireBtn('btn-geo', 'op-geo', () => new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('unsupported'));
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            const c = p.coords;
+            const bits = [];
+            bits.push(`${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}`);
+            bits.push(`accuracy ±${Math.round(c.accuracy)}m`);
+            if (c.altitude != null) bits.push(`alt ${Math.round(c.altitude)}m ±${Math.round(c.altitudeAccuracy||0)}m`);
+            if (c.heading != null) bits.push(`heading ${Math.round(c.heading)}°`);
+            if (c.speed != null) bits.push(`speed ${c.speed.toFixed(2)} m/s`);
+            bits.push(`timestamp ${new Date(p.timestamp).toLocaleTimeString()}`);
+            resolve(bits.join(' • '));
+          },
+          e => reject(new Error(e.message)),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }), { updatable: true });
+
+      // ---- Camera / mic full details ----
+      wireBtn('btn-media', 'op-media', async () => {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('unsupported');
+        // Adaptive: mobile browsers reliably grant only one kind per click gesture,
+        // so we ask for video only. Desktop can handle the combined prompt which
+        // populates labels for both cameras and mics simultaneously.
+        let audioStream, videoStream;
+        if (IS_MOBILE_OS) {
+          // On mobile, get video first (this is the "Camera / Mic Details" button —
+          // camera info is the primary use case). User can grant mic separately
+          // by tapping Test Microphone.
+          try { videoStream = await navigator.mediaDevices.getUserMedia({ video: true }); } catch {}
+        } else {
+          try {
+            const combinedStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            videoStream = combinedStream;
+            audioStream = combinedStream;
+          } catch {
+            try { videoStream = await navigator.mediaDevices.getUserMedia({ video: true }); } catch {}
+            try { audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {}
+          }
+        }
+        if (!audioStream && !videoStream) throw new Error('no access granted');
+
+        // Enumerate WHILE streams are active — this is when labels are populated
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const supportedConstraints = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
+
+        const html = [];
+        let cams = devs.filter(d => d.kind === 'videoinput');
+        let mics = devs.filter(d => d.kind === 'audioinput');
+        const spkrs = devs.filter(d => d.kind === 'audiooutput');
+
+        // Firefox file:// workaround: enumerateDevices returns stripped entries
+        // (empty deviceId, empty label). Synthesize the device list from the actual
+        // live tracks in the permission stream — those DO have real labels.
+        const camsStripped = cams.length === 0 || cams.every(d => !d.deviceId || !d.label);
+        const micsStripped = mics.length === 0 || mics.every(d => !d.deviceId || !d.label);
+
+        if (camsStripped && videoStream) {
+          const vidTracks = videoStream.getVideoTracks();
+          if (vidTracks.length) {
+            cams = vidTracks.map(t => ({
+              kind: 'videoinput',
+              label: t.label || '',
+              deviceId: t.getSettings?.().deviceId || t.id,
+              groupId: t.getSettings?.().groupId || '',
+            }));
+          }
+        }
+        if (micsStripped && audioStream) {
+          const audTracks = audioStream.getAudioTracks();
+          if (audTracks.length) {
+            mics = audTracks.map(t => ({
+              kind: 'audioinput',
+              label: t.label || '',
+              deviceId: t.getSettings?.().deviceId || t.id,
+              groupId: t.getSettings?.().groupId || '',
+            }));
+          }
+        }
+
+        html.push(`<div class="text-gray-500 dark:text-gray-400 font-medium mb-1">Cameras: ${cams.length}</div>`);
+        for (const c of cams) {
+          html.push(`<div class="pl-2 mb-2"><div class="font-medium">📷 ${c.label || 'unnamed camera'}</div>`);
+          html.push(`<div class="text-gray-500 dark:text-gray-400">deviceId: ${(c.deviceId||'').slice(0, 20) || '(hidden)'}… • groupId: ${(c.groupId||'').slice(0, 20) || '(hidden)'}…</div>`);
+          // Try to get capabilities
+          if (videoStream) {
+            try {
+              const track = videoStream.getVideoTracks()[0];
+              if (track) {
+                const settings = track.getSettings ? track.getSettings() : {};
+                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                html.push(`<div class="text-gray-500 dark:text-gray-400">current: ${settings.width||'?'}×${settings.height||'?'} @ ${settings.frameRate?.toFixed?.(0) || settings.frameRate || '?'} fps, facing: ${settings.facingMode || 'n/a'}</div>`);
+                if (caps.width && caps.height) html.push(`<div class="text-gray-500 dark:text-gray-400">supports: ${caps.width.min||0}-${caps.width.max}×${caps.height.min||0}-${caps.height.max} @ up to ${caps.frameRate?.max || '?'} fps</div>`);
+                const extras = [];
+                if (caps.zoom) extras.push(`zoom ${caps.zoom.min}-${caps.zoom.max}`);
+                if (caps.torch) extras.push('torch: yes');
+                if (caps.focusMode) extras.push(`focus: ${caps.focusMode.join('/')}`);
+                if (caps.exposureMode) extras.push(`exposure: ${caps.exposureMode.join('/')}`);
+                if (caps.whiteBalanceMode) extras.push(`WB: ${caps.whiteBalanceMode.join('/')}`);
+                if (caps.aspectRatio) extras.push(`aspect: ${caps.aspectRatio.min?.toFixed(2)}-${caps.aspectRatio.max?.toFixed(2)}`);
+                if (extras.length) html.push(`<div class="text-gray-500 dark:text-gray-400">features: ${extras.join(' • ')}</div>`);
+              }
+            } catch {}
+          }
+          html.push('</div>');
+        }
+
+        html.push(`<div class="text-gray-500 dark:text-gray-400 font-medium mb-1 mt-2">Microphones: ${mics.length}</div>`);
+        for (const m of mics) {
+          html.push(`<div class="pl-2 mb-2"><div class="font-medium">🎤 ${m.label || 'unnamed mic'}</div>`);
+          html.push(`<div class="text-gray-500 dark:text-gray-400">deviceId: ${(m.deviceId||'').slice(0, 20) || '(hidden)'}… • groupId: ${(m.groupId||'').slice(0, 20) || '(hidden)'}…</div>`);
+          if (audioStream) {
+            try {
+              const track = audioStream.getAudioTracks()[0];
+              if (track) {
+                const settings = track.getSettings ? track.getSettings() : {};
+                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                const s = [];
+                if (settings.sampleRate) s.push(`${settings.sampleRate} Hz`);
+                if (settings.channelCount) s.push(`${settings.channelCount} ch`);
+                if (settings.sampleSize) s.push(`${settings.sampleSize}-bit`);
+                if (settings.echoCancellation != null) s.push(`echo cancel: ${settings.echoCancellation}`);
+                if (settings.noiseSuppression != null) s.push(`noise supp: ${settings.noiseSuppression}`);
+                if (settings.autoGainControl != null) s.push(`AGC: ${settings.autoGainControl}`);
+                if (s.length) html.push(`<div class="text-gray-500 dark:text-gray-400">current: ${s.join(' • ')}</div>`);
+                if (caps.sampleRate) html.push(`<div class="text-gray-500 dark:text-gray-400">supports: ${caps.sampleRate.min}-${caps.sampleRate.max} Hz, ${caps.channelCount?.min||1}-${caps.channelCount?.max||2} ch</div>`);
+              }
+            } catch {}
+          }
+          html.push('</div>');
+        }
+
+        html.push(`<div class="text-gray-500 dark:text-gray-400 font-medium mb-1 mt-2">Speakers: ${spkrs.length}</div>`);
+        for (const s of spkrs) {
+          html.push(`<div class="pl-2"><div class="font-medium">🔊 ${s.label || 'unnamed speaker'}</div>`);
+          html.push(`<div class="text-gray-500 dark:text-gray-400">deviceId: ${(s.deviceId||'').slice(0, 20) || '(hidden)'}…</div></div>`);
+        }
+
+        html.push(`<div class="mt-2 text-gray-500 dark:text-gray-400">Supported constraints: ${Object.keys(supportedConstraints).filter(k => supportedConstraints[k]).join(', ')}</div>`);
+
+        // Stop all tracks
+        [audioStream, videoStream].forEach(s => s?.getTracks?.().forEach(t => t.stop()));
+        return html.join('');
+      }, { html: true, updatable: true });
+
+      // ============================================================
+      // TEST MODAL — Camera / Microphone preview
+      // ============================================================
+      const testModal = document.getElementById('test-modal');
+      const testTitle = document.getElementById('test-modal-title');
+      const testSelect = document.getElementById('test-modal-select');
+      const testPreview = document.getElementById('test-modal-preview');
+      const testInfo = document.getElementById('test-modal-info');
+      const testDone = document.getElementById('test-modal-done');
+      let currentStream = null;
+      let audioCtxTest = null;
+      let audioRAF = null;
+
+      function stopTestStream() {
+        if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+        if (audioRAF) { cancelAnimationFrame(audioRAF); audioRAF = null; }
+        if (audioCtxTest) { try { audioCtxTest.close(); } catch {} audioCtxTest = null; }
+      }
+
+      function closeTestModal() {
+        stopTestStream();
+        testModal.style.display = 'none';
+        testPreview.innerHTML = '<span class="text-gray-500 text-sm p-4">Select a device to preview…</span>';
+        testInfo.textContent = '';
+        testSelect.innerHTML = '';
+        const hint = document.getElementById('test-modal-hint');
+        if (hint) { hint.style.display = 'none'; hint.textContent = ''; }
+        const raw = document.getElementById('test-modal-raw');
+        if (raw) {
+          raw.style.display = 'none';
+          const rawBody = document.getElementById('test-modal-raw-body');
+          if (rawBody) rawBody.textContent = '';
+        }
+      }
+
+      testDone.addEventListener('click', closeTestModal);
+      testModal.addEventListener('click', (e) => { if (e.target === testModal) closeTestModal(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && testModal.style.display !== 'none') closeTestModal(); });
+
+      // Diagnostic hint element (persistent — separate from testInfo which gets
+      // overwritten by renderStream when the preview loads). Made VERY visible.
+      let testHintEl = document.getElementById('test-modal-hint');
+      if (!testHintEl) {
+        testHintEl = document.createElement('div');
+        testHintEl.id = 'test-modal-hint';
+        testHintEl.className = 'text-sm mt-3 p-3 rounded-lg border-2 border-red-500 bg-red-50 dark:bg-red-900/40 text-red-900 dark:text-red-100';
+        testHintEl.style.display = 'none';
+        const infoParent = testInfo.parentNode;
+        infoParent.insertBefore(testHintEl, testInfo);
+      }
+      // Raw device dump element — collapsible <details> so it's out of the way
+      let testRawEl = document.getElementById('test-modal-raw');
+      if (!testRawEl) {
+        testRawEl = document.createElement('details');
+        testRawEl.id = 'test-modal-raw';
+        testRawEl.className = 'text-xs mt-3';
+        testRawEl.innerHTML = `
+          <summary class="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">Show raw browser diagnostic</summary>
+          <div class="flex gap-2 mt-2 flex-wrap">
+            <button id="test-raw-copy" class="action-btn" data-target="test-modal-raw-body">Copy</button>
+            <button id="test-raw-download" class="action-btn" data-target="test-modal-raw-body">Download</button>
+          </div>
+          <pre id="test-modal-raw-body" class="mt-2 p-3 rounded-lg bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 overflow-auto max-h-40 whitespace-pre-wrap"></pre>`;
+        testRawEl.style.display = 'none';
+        const infoParent = testInfo.parentNode;
+        infoParent.insertBefore(testRawEl, testInfo);
+      }
+
+      async function openTestModal(kind, preStartedPromise) {
+        // kind = 'video' or 'audio'
+        // preStartedPromise: getUserMedia({audio:true,video:true}) promise that was
+        // kicked off SYNCHRONOUSLY from the click handler (required for Android).
+        const label = kind === 'video' ? 'Camera' : 'Microphone';
+        testTitle.textContent = label;
+        // Set filename for the modal's copy/download buttons based on kind
+        const filename = kind === 'video' ? 'cameradata.json' : 'microphonedata.json';
+        const copyBtn = document.getElementById('test-raw-copy');
+        const dlBtn = document.getElementById('test-raw-download');
+        if (copyBtn) copyBtn.dataset.filename = filename;
+        if (dlBtn) dlBtn.dataset.filename = filename;
+        testModal.style.display = 'flex';
+        testSelect.innerHTML = '<option>Loading devices…</option>';
+        testPreview.innerHTML = '<span class="text-gray-500 text-sm p-4">Requesting permission…</span>';
+        testInfo.textContent = '';
+        testHintEl.style.display = 'none';
+        testHintEl.textContent = '';
+
+        // Pre-flight environment check for known label-blocking situations
+        const envIssues = [];
+        if (location.protocol === 'file:') envIssues.push('file');
+        if (!window.isSecureContext) envIssues.push('insecure');
+        if (window.self !== window.top) envIssues.push('iframe');
+
+        // Use the pre-started getUserMedia promise from the click handler (kept the
+        // user-activation intact on Android/iOS).
+        let permStream = null;
+        let permError = null;
+        try {
+          permStream = await (preStartedPromise || navigator.mediaDevices.getUserMedia(makeGumConstraints(kind)));
+        } catch (firstErr) {
+          permError = firstErr;
+          // On DESKTOP: combined audio+video failed, try just the kind we need.
+          // On MOBILE: don't retry — the gesture is dead by now, retry would fail
+          // and might trigger a "duplicate permission request" error.
+          if (!IS_MOBILE_OS) {
+            try {
+              permStream = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true });
+              permError = null;
+            } catch (singleErr) {
+              permError = singleErr;
+            }
+          }
+        }
+
+        if (!permStream) {
+          testPreview.innerHTML = `<span class="text-red-400 text-sm p-4">Access denied: ${permError?.message || permError?.name || 'unknown'}</span>`;
+          testSelect.innerHTML = '<option>No devices available</option>';
+          return;
+        }
+
+        // Enumerate WHILE the stream is active — this is when labels are populated
+        let devs = [];
+        try {
+          devs = await navigator.mediaDevices.enumerateDevices();
+        } catch (e) {
+          console.error('enumerateDevices failed:', e);
+          testPreview.innerHTML = `<span class="text-red-400 text-sm p-4">Failed to enumerate devices: ${e.message}</span>`;
+          permStream.getTracks().forEach(t => t.stop());
+          return;
+        }
+
+        let filtered = devs.filter(d => d.kind === (kind === 'video' ? 'videoinput' : 'audioinput'));
+
+        // ==== Firefox file:// workaround ====
+        // On Firefox+file://, enumerateDevices() returns stripped devices with empty
+        // deviceId/groupId/label to prevent fingerprinting, even though the active
+        // MediaStreamTracks DO have real labels and deviceIds. When enumeration is
+        // useless, synthesize the device list from the active tracks themselves.
+        const enumerationIsStripped = filtered.length === 0 || filtered.every(d => !d.deviceId);
+        if (enumerationIsStripped) {
+          const wantedKind = kind === 'video' ? 'video' : 'audio';
+          const tracksAsDevices = permStream.getTracks()
+            .filter(t => t.kind === wantedKind)
+            .map(t => {
+              const settings = t.getSettings?.() || {};
+              return {
+                kind: kind === 'video' ? 'videoinput' : 'audioinput',
+                label: t.label,
+                deviceId: settings.deviceId || t.id,
+                groupId: settings.groupId || '',
+              };
+            });
+          if (tracksAsDevices.length) {
+            console.log('[fallback] enumerateDevices stripped, using active tracks as device list', tracksAsDevices);
+            filtered = tracksAsDevices;
+          }
+        }
+
+        if (!filtered.length) {
+          permStream.getTracks().forEach(t => t.stop());
+          testSelect.innerHTML = '<option>No devices found</option>';
+          testPreview.innerHTML = `<span class="text-gray-500 text-sm p-4">No ${label.toLowerCase()}s detected</span>`;
+          return;
+        }
+
+        // Build a comprehensive label lookup: check enumerateDevices labels AND all
+        // active MediaStreamTrack labels from the perm stream.
+        const labelByDeviceId = {};
+        for (const d of filtered) {
+          if (d.label && d.label.trim()) labelByDeviceId[d.deviceId] = d.label.trim();
+        }
+        // Also index track labels by deviceId AND by track-label directly as a fallback key
+        const trackLabelsFallback = [];
+        for (const track of permStream.getTracks()) {
+          const trackDeviceId = track.getSettings?.().deviceId;
+          if (track.label) {
+            if (trackDeviceId && !labelByDeviceId[trackDeviceId]) {
+              labelByDeviceId[trackDeviceId] = track.label;
+            }
+            trackLabelsFallback.push({ kind: track.kind, label: track.label, deviceId: trackDeviceId });
+          }
+        }
+
+        const withLabels = Object.keys(labelByDeviceId).length;
+        console.log(`[${label} enumeration]`, {
+          totalDevices: filtered.length,
+          withLabels,
+          protocol: location.protocol,
+          isSecureContext: window.isSecureContext,
+          inIframe: window.self !== window.top,
+          envIssues,
+          rawDevices: filtered.map(d => ({
+            kind: d.kind,
+            label: d.label || '(empty)',
+            deviceId: (d.deviceId || '').slice(0, 20) + '…',
+            groupId: (d.groupId || '').slice(0, 20) + '…',
+          })),
+          trackLabels: permStream.getTracks().map(t => ({ kind: t.kind, label: t.label || '(empty)', enabled: t.enabled, readyState: t.readyState })),
+          labelByDeviceId,
+        });
+
+        // Build dropdown options — real labels come first. If deviceId lookup fails,
+        // fall back to the Nth track label from the perm stream of the same kind.
+        const sameKindTracks = trackLabelsFallback.filter(t => t.kind === (kind === 'video' ? 'video' : 'audio'));
+        testSelect.innerHTML = filtered.map((d, i) => {
+          const name = labelByDeviceId[d.deviceId]
+            || (sameKindTracks[i]?.label)
+            || `${label} ${i + 1}`;
+          const title = `${name}\ndeviceId: ${d.deviceId}\ngroupId: ${d.groupId}\nkind: ${d.kind}`;
+          return `<option value="${d.deviceId}" title="${title.replace(/"/g, '&quot;')}">${name}</option>`;
+        }).join('');
+
+        // Always populate the on-screen raw diagnostic — this shows the user exactly
+        // what the browser returned, no DevTools needed.
+        const rawDump = {
+          environment: {
+            protocol: location.protocol,
+            origin: location.origin,
+            host: location.host,
+            isSecureContext: window.isSecureContext,
+            inIframe: window.self !== window.top,
+          },
+          permissionStreamTracks: permStream.getTracks().map(t => ({
+            kind: t.kind,
+            label: t.label || '(empty string)',
+            readyState: t.readyState,
+            deviceId: (t.getSettings?.().deviceId || '').slice(0, 30) + '…',
+          })),
+          enumerateDevicesRaw: filtered.map(d => ({
+            kind: d.kind,
+            label: d.label || '(empty string)',
+            deviceId: (d.deviceId || '').slice(0, 30) + '…',
+            groupId: (d.groupId || '').slice(0, 30) + '…',
+          })),
+          labelsFound: withLabels,
+          totalDevices: filtered.length,
+        };
+        const rawBody = document.getElementById('test-modal-raw-body');
+        if (rawBody) rawBody.textContent = JSON.stringify(rawDump, null, 2);
+        testRawEl.style.display = 'block';
+        testRawEl.open = false;  // start collapsed
+
+        // Show a persistent hint only when there's an actual problem.
+        // If labels are working, don't nag about file:// mode.
+        const finalLabelsFound = Object.keys(labelByDeviceId).length + sameKindTracks.length;
+        const noLabels = finalLabelsFound === 0;
+        // We probably have hidden devices if we're on file:// AND only 1 device shows
+        // but the perm stream reveals a track that isn't in the enumerated list.
+        const activeTrackKind = kind === 'video' ? 'video' : 'audio';
+        const activeTracks = permStream.getTracks().filter(t => t.kind === activeTrackKind);
+        const probablyHiddenDevices = envIssues.includes('file') && filtered.length <= activeTracks.length;
+
+        if (noLabels) {
+          const reasons = [];
+          if (envIssues.includes('insecure')) {
+            reasons.push('Page is not in a secure context. Serve over https:// or localhost.');
+          } else if (envIssues.includes('iframe')) {
+            reasons.push('Running inside a sandboxed iframe. The parent frame did not grant allow="camera; microphone" so labels are hidden by the browser.');
+          } else if (envIssues.includes('file')) {
+            reasons.push('You opened this via file:// URL. Some browsers block device labels on file://. Try serving the file via <code>python3 -m http.server 8000</code> and opening <code>http://localhost:8000/robo-os-detector.html</code>.');
+          } else {
+            reasons.push('Browser returned empty labels even though permission is granted. Try: (1) Chrome — check <code>chrome://settings/content/camera</code> and mic settings, this site should be under "Allowed". (2) Firefox — click the padlock icon and grant camera/mic permanently. (3) Reload after granting.');
+          }
+          // Red banner for actual errors
+          testHintEl.className = 'text-sm mt-3 p-3 rounded-lg border-2 border-red-500 bg-red-50 dark:bg-red-900/40 text-red-900 dark:text-red-100';
+          testHintEl.innerHTML = '<strong>⚠ Device names not available</strong><br>' + reasons.join('<br>');
+          testHintEl.style.display = 'block';
+        } else if (probablyHiddenDevices) {
+          // Labels work, but we might be missing other devices due to file:// restrictions.
+          // Only show a subtle hint, and use gray/yellow instead of red.
+          testHintEl.className = 'text-xs mt-3 p-3 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-gray-700 dark:text-gray-300';
+          testHintEl.innerHTML = `Only your active ${label.toLowerCase()} is shown. If you have other ${label.toLowerCase()}s (built-in vs external), serve this page via <code>http://localhost</code> instead of <code>file://</code> to see all of them.`;
+          testHintEl.style.display = 'block';
+        } else {
+          testHintEl.style.display = 'none';
+        }
+
+        // Build the preview stream: strip out any tracks of the wrong kind so we
+        // don't get audio feedback on the camera preview (or a black video on mic).
+        const wantedTracks = kind === 'video' ? permStream.getVideoTracks() : permStream.getAudioTracks();
+        const unwantedTracks = kind === 'video' ? permStream.getAudioTracks() : permStream.getVideoTracks();
+        unwantedTracks.forEach(t => t.stop());
+
+        if (wantedTracks.length) {
+          currentStream = new MediaStream(wantedTracks);
+        } else {
+          // Perm stream lacked the kind we need — request it now (permission is already granted)
+          try {
+            currentStream = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true });
+          } catch (e) {
+            testPreview.innerHTML = `<span class="text-red-400 text-sm p-4">Failed to open ${label.toLowerCase()}: ${e.message || e.name}</span>`;
+            return;
+          }
+        }
+
+        // Store label map for renderStream to consult
+        currentStream._labelMap = labelByDeviceId;
+
+        // Select the option matching the actually-active device
+        const initialTrack = kind === 'video' ? currentStream.getVideoTracks()[0] : currentStream.getAudioTracks()[0];
+        const initialDeviceId = initialTrack?.getSettings?.().deviceId;
+        if (initialDeviceId) {
+          for (const opt of testSelect.options) {
+            if (opt.value === initialDeviceId) { opt.selected = true; break; }
+          }
+        }
+        await renderStream(kind, currentStream, false);
+
+        // When user switches device: use applyConstraints on the existing track
+        testSelect.onchange = async () => {
+          const newId = testSelect.value;
+          const track = kind === 'video' ? currentStream.getVideoTracks()[0] : currentStream.getAudioTracks()[0];
+          if (!track) return;
+          let usedFallback = false;
+          try { await track.applyConstraints({ deviceId: { exact: newId } }); }
+          catch {
+            try { await track.applyConstraints({ deviceId: newId }); }
+            catch { usedFallback = true; }
+          }
+          if (track.getSettings().deviceId !== newId) usedFallback = true;
+          await renderStream(kind, currentStream, usedFallback);
+        };
+      }
+
+      // Render helper — takes an existing stream and shows the preview
+      async function renderStream(kind, stream, usedFallback) {
+        // Cancel any prior audio meter loop before starting a new one
+        if (audioRAF) { cancelAnimationFrame(audioRAF); audioRAF = null; }
+        if (audioCtxTest) { try { audioCtxTest.close(); } catch {}; audioCtxTest = null; }
+
+        // Resolve the device name using every source we have: track.label,
+        // the cached label map from openTestModal, enumerateDevices, in that order.
+        async function resolveDeviceName(track) {
+          if (track?.label && track.label.trim()) return track.label.trim();
+          const settings = track?.getSettings?.() || {};
+          const map = stream._labelMap || {};
+          if (map[settings.deviceId]) return map[settings.deviceId];
+          try {
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const match = devs.find(d => d.deviceId === settings.deviceId);
+            if (match?.label && match.label.trim()) return match.label.trim();
+          } catch {}
+          return '';
+        }
+
+        if (kind === 'video') {
+          const track = stream.getVideoTracks()[0];
+          testPreview.innerHTML = '';
+          const vid = document.createElement('video');
+          vid.autoplay = true; vid.playsInline = true; vid.muted = true;
+          vid.setAttribute('playsinline', '');
+          vid.srcObject = stream;
+          testPreview.appendChild(vid);
+          vid.play().catch(err => console.warn('video.play() rejected:', err));
+
+          const updateInfo = async () => {
+            const s = track.getSettings ? track.getSettings() : {};
+            const c = track.getCapabilities ? track.getCapabilities() : {};
+            const deviceLabel = await resolveDeviceName(track);
+            const parts = [];
+            if (deviceLabel) parts.push(deviceLabel);
+            if (s.width && s.height) parts.push(`${s.width}×${s.height}`);
+            if (s.frameRate) parts.push(`${Math.round(s.frameRate)} fps`);
+            if (c.width?.max && c.height?.max) parts.push(`max ${c.width.max}×${c.height.max}`);
+            if (c.frameRate?.max) parts.push(`up to ${Math.round(c.frameRate.max)} fps`);
+            if (s.facingMode) parts.push(`facing: ${s.facingMode}`);
+            if (s.aspectRatio) parts.push(`aspect: ${s.aspectRatio.toFixed(2)}`);
+            if (c.zoom) parts.push(`zoom ${c.zoom.min}-${c.zoom.max}`);
+            if (c.torch) parts.push('torch supported');
+            testInfo.textContent = (usedFallback ? '⚠ Requested device unavailable — using default. ' : '') + parts.join(' • ');
+          };
+          vid.onloadedmetadata = updateInfo;
+          updateInfo();
+        } else {
+          testPreview.innerHTML = `
+            <div class="w-full p-6">
+              <div class="text-white text-center mb-2">🎤 Listening…</div>
+              <div class="mic-meter"><div id="mic-meter-fill" class="mic-meter-fill"></div></div>
+              <div id="mic-meter-db" class="text-gray-400 text-xs text-center mt-2">Speak to see the level bar move</div>
+            </div>`;
+          const meterFill = document.getElementById('mic-meter-fill');
+          const dbLabel = document.getElementById('mic-meter-db');
+          audioCtxTest = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtxTest.state === 'suspended') { try { await audioCtxTest.resume(); } catch {} }
+          const source = audioCtxTest.createMediaStreamSource(stream);
+          const analyser = audioCtxTest.createAnalyser();
+          analyser.fftSize = 2048;
+          analyser.smoothingTimeConstant = 0.3;
+          source.connect(analyser);
+          const data = new Float32Array(analyser.fftSize);
+          const tick = () => {
+            analyser.getFloatTimeDomainData(data);
+            let sumSq = 0;
+            for (let i = 0; i < data.length; i++) sumSq += data[i] * data[i];
+            const rms = Math.sqrt(sumSq / data.length);
+            const db = 20 * Math.log10(rms || 1e-9);
+            const pct = Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+            meterFill.style.width = pct.toFixed(1) + '%';
+            if (dbLabel) dbLabel.textContent = `${db.toFixed(1)} dB • RMS ${(rms * 100).toFixed(2)}%`;
+            audioRAF = requestAnimationFrame(tick);
+          };
+          tick();
+
+          const audioTrack = stream.getAudioTracks()[0];
+          const s = audioTrack.getSettings ? audioTrack.getSettings() : {};
+          const c = audioTrack.getCapabilities ? audioTrack.getCapabilities() : {};
+          const deviceLabel = await resolveDeviceName(audioTrack);
+          const parts = [];
+          if (deviceLabel) parts.push(deviceLabel);
+          if (s.sampleRate) parts.push(`${s.sampleRate} Hz`);
+          if (s.channelCount) parts.push(`${s.channelCount} ch`);
+          if (s.sampleSize) parts.push(`${s.sampleSize}-bit`);
+          if (c.sampleRate?.max) parts.push(`up to ${c.sampleRate.max} Hz`);
+          if (s.echoCancellation != null) parts.push(`echo cancel: ${s.echoCancellation}`);
+          if (s.noiseSuppression != null) parts.push(`noise supp: ${s.noiseSuppression}`);
+          if (s.autoGainControl != null) parts.push(`AGC: ${s.autoGainControl}`);
+          testInfo.textContent = (usedFallback ? '⚠ Requested device unavailable — using default mic. ' : '') + parts.join(' • ');
+        }
+      }
+
+      // Expose openTestModal so the early-registered click handlers (below the IIFE)
+      // can call it. Those handlers are wired synchronously on page load — critical
+      // for mobile where users may tap the button before this async IIFE finishes.
+      window.__openTestModal = openTestModal;
+
+      // ---- Notifications ----
+      wireBtn('btn-notif', 'op-notif', async () => {
+        if (!('Notification' in window)) throw new Error('unsupported');
+        const p = await Notification.requestPermission();
+        const bits = [`permission: ${p}`];
+        if (Notification.maxActions != null) bits.push(`max actions: ${Notification.maxActions}`);
+        if (p === 'granted') {
+          const supported = [];
+          if ('image' in Notification.prototype) supported.push('image');
+          if ('vibrate' in Notification.prototype) supported.push('vibrate');
+          if ('badge' in Notification.prototype) supported.push('badge');
+          if (supported.length) bits.push(`features: ${supported.join(', ')}`);
+        }
+        return bits.join(' • ');
+      });
+
+      // ---- Clipboard read (with format detection) ----
+      wireBtn('btn-clip', 'op-clip', async () => {
+        if (!navigator.clipboard) throw new Error('unsupported');
+        const bits = [];
+        if (navigator.clipboard.read) {
+          try {
+            const items = await navigator.clipboard.read();
+            bits.push(`${items.length} clipboard item(s)`);
+            for (const item of items) bits.push(`types: [${item.types.join(', ')}]`);
+          } catch {}
+        }
+        if (navigator.clipboard.readText) {
+          const text = await navigator.clipboard.readText();
+          bits.push(`${text.length} chars: "${text.slice(0, 80).replace(/\n/g, '\\n')}${text.length > 80 ? '…' : ''}"`);
+        }
+        return bits.join(' • ') || 'empty';
+      }, { updatable: true });
+
+      // ---- MIDI (full device details) ----
+      wireBtn('btn-midi', 'op-midi', async () => {
+        if (!navigator.requestMIDIAccess) throw new Error('unsupported');
+        const access = await navigator.requestMIDIAccess({ sysex: false });
+        const ins = Array.from(access.inputs.values());
+        const outs = Array.from(access.outputs.values());
+        const desc = (d) => `${d.name || 'unnamed'} (mfr: ${d.manufacturer || '?'}, ver: ${d.version || '?'}, state: ${d.state}, conn: ${d.connection})`;
+        const parts = [`sysex: ${access.sysexEnabled}`];
+        parts.push(`inputs (${ins.length}): ${ins.length ? ins.map(desc).join(' | ') : 'none'}`);
+        parts.push(`outputs (${outs.length}): ${outs.length ? outs.map(desc).join(' | ') : 'none'}`);
+        return parts.join(' • ');
+      }, { updatable: true });
+
+      // ---- Multi-monitor (Window Management) ----
+      wireBtn('btn-screens', 'op-screens', async () => {
+        if (!window.getScreenDetails) throw new Error('unsupported');
+        const details = await window.getScreenDetails();
+        return details.screens.map((s, i) => {
+          const bits = [`#${i+1}`, s.label || 'display', `${s.width}×${s.height}`, `avail ${s.availWidth}×${s.availHeight}`, `at (${s.left},${s.top})`, `${s.colorDepth}-bit`, `${s.devicePixelRatio}x DPR`];
+          if (s.isPrimary) bits.push('primary');
+          if (s.isInternal) bits.push('internal');
+          if (s.isExtended) bits.push('extended');
+          if (s.orientation?.type) bits.push(s.orientation.type);
+          return bits.join(' ');
+        }).join(' | ');
+      }, { updatable: true });
+
+      // ---- Local fonts (full list) ----
+      wireBtn('btn-fonts', 'op-fonts', async () => {
+        if (!window.queryLocalFonts) throw new Error('unsupported');
+        const fonts = await window.queryLocalFonts();
+        const list = document.getElementById('op-fonts-list');
+        if (list) {
+          const families = [...new Set(fonts.map(f => f.family))];
+          list.innerHTML = `<div class="text-gray-500 dark:text-gray-400 mb-1">${families.length} families, ${fonts.length} faces:</div>` + families.join(', ');
+        }
+        return `${fonts.length} faces across ${new Set(fonts.map(f => f.family)).size} families`;
+      });
+
+      // ---- Storage Access API ----
+      wireBtn('btn-storage', 'op-storage', async () => {
+        if (!document.requestStorageAccess) throw new Error('unsupported');
+        await document.requestStorageAccess();
+        const has = await document.hasStorageAccess();
+        return has ? 'granted (3rd-party cookies allowed)' : 'denied';
+      });
+
+      // ---- Persistent Storage ----
+      wireBtn('btn-persist', 'op-persist', async () => {
+        if (!navigator.storage?.persist) throw new Error('unsupported');
+        const persisted = await navigator.storage.persist();
+        return persisted ? 'granted — data will not be evicted' : 'denied';
+      });
+
+      // ---- Device Motion / Orientation ----
+      wireBtn('btn-motion', 'op-motion', async () => {
+        let orientPerm = 'granted', motionPerm = 'granted';
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          orientPerm = await DeviceOrientationEvent.requestPermission();
+        }
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          motionPerm = await DeviceMotionEvent.requestPermission();
+        }
+        return new Promise((resolve) => {
+          let ori = null, mot = null, done = false;
+          const tryFinish = () => {
+            if (done) return;
+            const parts = [`orient=${orientPerm}`, `motion=${motionPerm}`];
+            if (ori) parts.push(`orientation: α ${ori.alpha?.toFixed(1)}° β ${ori.beta?.toFixed(1)}° γ ${ori.gamma?.toFixed(1)}°`);
+            if (mot) {
+              if (mot.acceleration) parts.push(`accel: x ${mot.acceleration.x?.toFixed(2)} y ${mot.acceleration.y?.toFixed(2)} z ${mot.acceleration.z?.toFixed(2)} m/s²`);
+              if (mot.rotationRate) parts.push(`rotation: α ${mot.rotationRate.alpha?.toFixed(1)} β ${mot.rotationRate.beta?.toFixed(1)} γ ${mot.rotationRate.gamma?.toFixed(1)} °/s`);
+              if (mot.interval) parts.push(`interval ${mot.interval}ms`);
+            }
+            done = true;
+            window.removeEventListener('deviceorientation', oh);
+            window.removeEventListener('devicemotion', mh);
+            resolve(parts.join(' • '));
+          };
+          const oh = (e) => { ori = { alpha: e.alpha, beta: e.beta, gamma: e.gamma }; if (mot) tryFinish(); };
+          const mh = (e) => { mot = { acceleration: e.acceleration, rotationRate: e.rotationRate, interval: e.interval }; if (ori) tryFinish(); };
+          window.addEventListener('deviceorientation', oh);
+          window.addEventListener('devicemotion', mh);
+          setTimeout(tryFinish, 2500);
+        });
+      }, { updatable: true });
+
+      // ---- Ambient Light ----
+      wireBtn('btn-light', 'op-light', async () => {
+        if (typeof AmbientLightSensor === 'undefined') throw new Error('unsupported');
+        return new Promise((resolve, reject) => {
+          try {
+            const sensor = new AmbientLightSensor();
+            sensor.addEventListener('reading', () => {
+              const lux = sensor.illuminance;
+              sensor.stop();
+              resolve(`${lux} lux (${lux < 50 ? 'dim' : lux < 400 ? 'indoor' : lux < 1000 ? 'bright indoor' : 'daylight'})`);
+            });
+            sensor.addEventListener('error', e => reject(new Error(e.error?.message || 'sensor error')));
+            sensor.start();
+            setTimeout(() => { try { sensor.stop(); } catch {}; reject(new Error('timeout')); }, 3000);
+          } catch (e) { reject(e); }
+        });
+      }, { updatable: true });
+
+      // ---- Bluetooth (full device details) ----
+      // Helper to describe a Bluetooth device
+      async function describeBtDevice(d) {
+        const parts = [`name: ${d.name || 'unnamed'}`, `id: ${d.id.slice(0, 16)}…`];
+        try {
+          const server = await d.gatt.connect();
+          parts.push(`connected: ${server.connected}`);
+          const services = await server.getPrimaryServices().catch(() => []);
+          if (services.length) parts.push(`services: ${services.map(s => s.uuid.slice(0, 8)).join(', ')}`);
+          server.disconnect();
+        } catch (e) { parts.push(`gatt: ${e.message}`); }
+        return parts.join(' • ');
+      }
+
+      wireBtn('btn-bt', 'op-bt', async () => {
+        if (!navigator.bluetooth?.requestDevice) throw new Error('unsupported');
+        // On Update: check if we already have paired devices we can enumerate
+        // (permissions.request-scoped list). Fall back to picker.
+        if (navigator.bluetooth.getDevices) {
+          try {
+            const known = await navigator.bluetooth.getDevices();
+            if (known.length) {
+              const infos = await Promise.all(known.map(describeBtDevice));
+              return `${known.length} paired device(s): ` + infos.join(' | ');
+            }
+          } catch {}
+        }
+        const d = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['device_information','battery_service','generic_access'] });
+        return await describeBtDevice(d);
+      }, { updatable: true });
+
+      // ---- USB ----
+      function describeUsbDevice(d) {
+        const parts = [
+          `product: ${d.productName || 'unnamed'}`,
+          `manufacturer: ${d.manufacturerName || '?'}`,
+          `serial: ${d.serialNumber || 'n/a'}`,
+          `VID: 0x${d.vendorId.toString(16).padStart(4,'0')}`,
+          `PID: 0x${d.productId.toString(16).padStart(4,'0')}`,
+          `USB ${d.usbVersionMajor}.${d.usbVersionMinor}.${d.usbVersionSubminor}`,
+          `class: ${d.deviceClass}/${d.deviceSubclass}/${d.deviceProtocol}`,
+          `configurations: ${d.configurations.length}`,
+        ];
+        if (d.configuration) {
+          parts.push(`current config: ${d.configuration.configurationName || '#'+d.configuration.configurationValue} (${d.configuration.interfaces.length} interfaces)`);
+        }
+        return parts.join(' • ');
+      }
+
+      wireBtn('btn-usb', 'op-usb', async () => {
+        if (!navigator.usb?.requestDevice) throw new Error('unsupported');
+        // On Update: list ALL previously authorized USB devices (no picker prompt).
+        // Only open the picker if we have zero authorized devices.
+        try {
+          const authorized = await navigator.usb.getDevices();
+          if (authorized.length) {
+            return `${authorized.length} authorized device(s): ` + authorized.map(describeUsbDevice).join(' | ');
+          }
+        } catch {}
+        const d = await navigator.usb.requestDevice({ filters: [] });
+        return describeUsbDevice(d);
+      }, { updatable: true });
+
+      // ---- HID ----
+      function describeHidDevice(d) {
+        return `${d.productName || 'unnamed'} (VID 0x${d.vendorId.toString(16).padStart(4,'0')}, PID 0x${d.productId.toString(16).padStart(4,'0')}, ${d.collections.length} collections, opened: ${d.opened})`;
+      }
+
+      wireBtn('btn-hid', 'op-hid', async () => {
+        if (!navigator.hid?.requestDevice) throw new Error('unsupported');
+        // On Update: list all previously granted HID devices
+        try {
+          const authorized = await navigator.hid.getDevices();
+          if (authorized.length) {
+            return `${authorized.length} authorized device(s): ` + authorized.map(describeHidDevice).join(' | ');
+          }
+        } catch {}
+        const devs = await navigator.hid.requestDevice({ filters: [] });
+        if (!devs.length) throw new Error('no device selected');
+        return devs.map(describeHidDevice).join(' | ');
+      }, { updatable: true });
+
+      // ---- Serial port ----
+      function describeSerialPort(port) {
+        const info = port.getInfo();
+        const vid = info.usbVendorId != null ? `VID 0x${info.usbVendorId.toString(16).padStart(4,'0')}` : 'VID n/a';
+        const pid = info.usbProductId != null ? `PID 0x${info.usbProductId.toString(16).padStart(4,'0')}` : 'PID n/a';
+        return `${vid} • ${pid}`;
+      }
+
+      wireBtn('btn-serial', 'op-serial', async () => {
+        if (!navigator.serial?.requestPort) throw new Error('unsupported');
+        // On Update: list all previously granted serial ports
+        try {
+          const authorized = await navigator.serial.getPorts();
+          if (authorized.length) {
+            return `${authorized.length} authorized port(s): ` + authorized.map(describeSerialPort).join(' | ');
+          }
+        } catch {}
+        const port = await navigator.serial.requestPort();
+        return describeSerialPort(port);
+      }, { updatable: true });
+
+      // ---- Gamepads ----
+      wireBtn('btn-gamepad', 'op-gamepad', async () => {
+        if (!navigator.getGamepads) throw new Error('unsupported');
+        // Prompt user to press a button
+        return new Promise((resolve, reject) => {
+          const check = () => {
+            const pads = Array.from(navigator.getGamepads()).filter(Boolean);
+            if (pads.length) {
+              resolve(pads.map((p, i) => `#${i} ${p.id} • ${p.buttons.length} buttons, ${p.axes.length} axes, mapping: ${p.mapping || 'standard'}, vibration: ${p.vibrationActuator ? 'yes' : 'no'}`).join(' | '));
+              return true;
+            }
+            return false;
+          };
+          if (check()) return;
+          window.addEventListener('gamepadconnected', () => check(), { once: true });
+          setTimeout(() => { if (!check()) reject(new Error('no gamepad detected — press a button on your controller')); }, 8000);
+        });
+      }, { updatable: true });
+
+      // ---- WebRTC local IPs ----
+      wireBtn('btn-webrtc', 'op-webrtc', async () => {
+        if (!window.RTCPeerConnection) throw new Error('unsupported');
+        return new Promise((resolve) => {
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          const ips = new Set();
+          const details = [];
+          pc.createDataChannel('');
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) { pc.close(); resolve(ips.size ? Array.from(ips).join(', ') + (details.length ? ` [${details.join(', ')}]` : '') : 'no candidates found'); return; }
+            const cand = e.candidate.candidate;
+            const m = cand.match(/(?:\d{1,3}\.){3}\d{1,3}|[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7}/i);
+            if (m && !ips.has(m[0])) {
+              ips.add(m[0]);
+              const typeMatch = cand.match(/typ (\w+)/);
+              if (typeMatch) details.push(`${m[0]} (${typeMatch[1]})`);
+            }
+          };
+          pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => resolve('failed'));
+          setTimeout(() => { pc.close(); resolve(ips.size ? Array.from(ips).join(', ') : 'no candidates found'); }, 4000);
+        });
+      }, { updatable: true });
+
+      // ============================================================
+      // UPDATE BUTTONS for always-available live data
+      // ============================================================
+      const bindUpdate = (id, fn) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.addEventListener('click', async () => {
+          b.disabled = true; const orig = b.textContent; b.textContent = 'Updating…';
+          try { await fn(); } catch (e) { console.warn(e); }
+          b.disabled = false; b.textContent = orig;
+        });
+      };
+
+      bindUpdate('upd-mem', () => {
+        const m = performance.memory;
+        if (m) {
+          set('hw-heap-limit', fmtBytes(m.jsHeapSizeLimit));
+          set('hw-heap-total', fmtBytes(m.totalJSHeapSize));
+          set('hw-heap-used', fmtBytes(m.usedJSHeapSize));
+        }
+      });
+
+      bindUpdate('upd-battery', async () => {
+        if (!navigator.getBattery) return;
+        const b = await navigator.getBattery();
+        const fmtSec = (s) => (s === Infinity ? '∞' : (s == null ? 'unknown' : Math.round(s/60) + ' min'));
+        set('hw-battery', `${Math.round(b.level*100)}% ${b.charging ? '(charging)' : '(on battery)'}`);
+        set('hw-battery-charge', fmtSec(b.chargingTime));
+        set('hw-battery-discharge', fmtSec(b.dischargingTime));
+      });
+
+      bindUpdate('upd-viewport', () => {
+        set('dp-viewport', `${window.innerWidth} × ${window.innerHeight}`);
+        set('dp-dpr', window.devicePixelRatio);
+        set('dp-orient', (screen.orientation?.type) || 'unknown');
+        set('dp-screen', `${screen.width} × ${screen.height}`);
+        set('dp-avail', `${screen.availWidth} × ${screen.availHeight}`);
+        set('dp-scheme', mm('(prefers-color-scheme: dark)') ? 'dark' : 'light');
+      });
+
+      bindUpdate('upd-network', () => {
+        const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+        set('nw-online', yn(navigator.onLine));
+        set('nw-type', c?.type || 'unknown');
+        set('nw-effective', c?.effectiveType || 'unknown');
+        set('nw-downlink', c?.downlink != null ? c.downlink + ' Mbps' : 'unknown');
+        set('nw-downmax', c?.downlinkMax != null ? c.downlinkMax + ' Mbps' : 'unknown');
+        set('nw-rtt', c?.rtt != null ? c.rtt + ' ms' : 'unknown');
+        set('nw-save', yn(c?.saveData ?? false));
+      });
+
+      bindUpdate('upd-ip', async () => {
+        set('nw-ip', 'checking…');
+        const info = await fetchIpInfo();
+        if (!info) { set('nw-ip', 'unavailable'); return; }
+        set('nw-ip', info.ip);
+        if (info.country_name || info.city || info.latitude != null) {
+          set('ip-country', info.country_name ? `${info.country_name}${info.country_code ? ' (' + info.country_code + ')' : ''}` : 'unknown');
+          set('ip-region', info.region || 'unknown'); set('ip-city', info.city || 'unknown');
+          set('ip-postal', info.postal || 'unknown');
+          set('ip-lat', info.latitude ?? 'unknown'); set('ip-lon', info.longitude ?? 'unknown');
+          set('ip-org', info.org || 'unknown'); set('ip-asn', info.asn || 'unknown');
+          set('ip-tz', info.timezone || 'unknown');
+          set('ip-match', info.timezone ? yn(info.timezone === dtOpts.timeZone) : 'unknown');
+        }
+      });
+
+      // Auto-tick current time every second so the row stays live
+      setInterval(() => { set('lc-time', new Date().toLocaleString()); }, 1000);
+
+      // Auto-update viewport on resize
+      window.addEventListener('resize', () => {
+        set('dp-viewport', `${window.innerWidth} × ${window.innerHeight}`);
+        set('dp-dpr', window.devicePixelRatio);
+      });
+
+      // Auto-update network on change
+      const conn2 = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn2 && conn2.addEventListener) {
+        conn2.addEventListener('change', () => document.getElementById('upd-network')?.click());
+      }
+      window.addEventListener('online', () => set('nw-online', 'yes'));
+      window.addEventListener('offline', () => set('nw-online', 'no'));
+
+      // ---- Wake Lock ----
+      wireBtn('btn-wake', 'op-wake', async () => {
+        if (!navigator.wakeLock?.request) throw new Error('unsupported');
+        const sentinel = await navigator.wakeLock.request('screen');
+        const startedAt = new Date().toLocaleTimeString();
+        setTimeout(() => sentinel.release(), 10000);
+        return `granted at ${startedAt} — screen kept awake for 10s (type: ${sentinel.type})`;
+      }, { updatable: true });
+
+      // ---------- Full JSON dump ----------
+      const details = {
+        device: { type: deviceType, vendor: deviceVendor, model: deviceModel || null, formFactor: (uaData && (uaData.formFactor || uaData.formFactors)) || null, isMobile, touchSupport: 'ontouchstart' in window || navigator.maxTouchPoints > 0, maxTouchPoints: navigator.maxTouchPoints ?? 0, pointer: mm('(pointer: fine)') ? 'fine' : mm('(pointer: coarse)') ? 'coarse' : 'none', hover: mm('(hover: hover)'), virtualKeyboard: 'virtualKeyboard' in navigator, keyboardLayout },
+        os: { name: osName, version: osVersion || null, platform, oscpu: navigator.oscpu || null, architecture: arch, bitness, wow64: uaData?.wow64 ?? null },
+        browser: { name: brName, version: brVersion || null, fullVersion: brFullVersion || null, engine: brEngine, vendor: navigator.vendor || null, brands: uaData?.brands || null, product: navigator.product || null, appName: navigator.appName || null, appVersion: navigator.appVersion || null, buildID: navigator.buildID || null, webdriver: navigator.webdriver ?? null, javaEnabled: typeof navigator.javaEnabled === 'function' ? navigator.javaEnabled() : false, autoplayPolicy },
+        userAgent: accurateUA, userAgentRaw: ua, userAgentData: uaData,
+        language, languages,
+        hardware: { cpuCores: navigator.hardwareConcurrency ?? null, deviceMemoryGB: navigator.deviceMemory ?? null, jsHeapLimit: mem?.jsHeapSizeLimit ?? null, jsHeapTotal: mem?.totalJSHeapSize ?? null, jsHeapUsed: mem?.usedJSHeapSize ?? null, gpuVendor, gpuRenderer, battery },
+        display: { screenWidth: screen.width, screenHeight: screen.height, availWidth: screen.availWidth, availHeight: screen.availHeight, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, pixelRatio: window.devicePixelRatio, colorDepth: screen.colorDepth, pixelDepth: screen.pixelDepth, orientation: screen.orientation?.type || null, colorGamut, dynamicRange, colorScheme, reducedMotion, contrastPref, forcedColors, refreshRate },
+        locale: { timezone: dtOpts.timeZone, timezoneOffsetMinutes: new Date().getTimezoneOffset(), locale: dtOpts.locale, calendar: dtOpts.calendar, numberingSystem: dtOpts.numberingSystem, hourCycle: dtOpts.hourCycle || null, currency: nfOpts.currency || null, firstDayOfWeek, currentTime: new Date().toISOString(), pageLoadedAt: new Date(performance.timeOrigin).toISOString() },
+        network: { ...network, protocol: location.protocol, host: location.host, publicIP },
+        ipGeolocation: ipGeo,
+        storage, capabilities: caps, permissions: perms,
+        webgl: { ...glDetails, gpuVendor, gpuRenderer },
+        webgpu: { info: webgpuInfo, features: webgpuFeats },
+        audio: audioInfo,
+        codecs, drm,
+        mediaDevices: { ...mediaCounts, voicesAvailable: voices },
+        sensors, plugins, mimeTypes, fonts: detectedFonts,
+        performance: perfTime,
+        fingerprint: { canvas: fpCanvas, webgl: fpWebGL, audio: fpAudio, fonts: fpFonts, combined: fpCombined },
+        page: { url: location.href, origin: location.origin, referrer: document.referrer || null, title: document.title, characterSet: document.characterSet, contentType: document.contentType },
+      };
+      document.getElementById('json-output').textContent = JSON.stringify(details, null, 2);
+      } catch (fatalErr) {
+        console.error('[Robo Data Finder fatal]', fatalErr);
+        // Show the error inline so mobile users can see what broke
+        const target = document.getElementById('json-output');
+        if (target) target.textContent = 'A JavaScript error prevented some data from loading:\n\n' + (fatalErr && fatalErr.stack || fatalErr);
+        // Also insert a banner at the top of the page
+        try {
+          const banner = document.createElement('div');
+          banner.style.cssText = 'position:sticky;top:0;background:#dc2626;color:white;padding:12px;font-size:13px;z-index:100;';
+          banner.textContent = '⚠ Some device probes failed — see console for details. Displayed data may be incomplete.';
+          document.body.insertBefore(banner, document.body.firstChild);
+        } catch {}
+      }
+    })();
+  </script>
+
+  <!-- Test Camera / Test Microphone click handlers — registered SYNCHRONOUSLY on
+       page load (outside the async IIFE) so they respond instantly on mobile,
+       where the IIFE may take several seconds to complete due to IP geolocation. -->
+  <script>
+    (function () {
+      var IS_MOBILE_OS = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+                        || (navigator.userAgentData && navigator.userAgentData.mobile);
+
+      function gumConstraint(kind) {
+        // Mobile: single-kind only. Combined audio+video reliably fails on Android
+        // because it double-prompts and the second prompt loses gesture activation.
+        if (IS_MOBILE_OS) return kind === 'video' ? { video: true } : { audio: true };
+        return { audio: true, video: true };
+      }
+
+      // Detect scenarios where the browser will silently refuse camera/mic on mobile.
+      function detectMobileBlockers() {
+        var blockers = [];
+        // file:// on mobile — most browsers hard-block getUserMedia
+        if (location.protocol === 'file:' && IS_MOBILE_OS) blockers.push('file');
+        // Not a secure context (needed for getUserMedia everywhere)
+        if (!window.isSecureContext) blockers.push('insecure');
+        // In-app WebView (Instagram, Facebook, TikTok, Discord, LinkedIn, etc.)
+        // These often lack permission APIs entirely
+        var ua = navigator.userAgent;
+        if (/FBAN|FBAV|Instagram|Line\/|MicroMessenger|Twitter|LinkedInApp|Snapchat|TikTok/i.test(ua)) blockers.push('inapp');
+        // navigator.mediaDevices missing (very old Android WebView, or insecure)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) blockers.push('nomediadevices');
+        return blockers;
+      }
+
+      function explainBlocker(blocker, kind) {
+        var device = kind === 'video' ? 'camera' : 'microphone';
+        switch (blocker) {
+          case 'file':
+            return 'Mobile browsers block ' + device + ' access on file:// pages. ' +
+                   'To use this on your phone: upload the file to a web host, OR run it via a local server (e.g. `python3 -m http.server` on your computer, then open your computer\'s IP:port from your phone on the same Wi-Fi).';
+          case 'insecure':
+            return 'This page is not on a secure origin. Mobile browsers require https:// (or localhost) for ' + device + ' access.';
+          case 'inapp':
+            return 'You\'re viewing this in an in-app browser (Instagram, Facebook, TikTok, etc.) which blocks ' + device + ' access. Tap the "⋮" or "share" menu and select "Open in Browser" / "Open in Chrome" / "Open in Safari".';
+          case 'nomediadevices':
+            return 'Your browser doesn\'t support the mediaDevices API. Try Chrome, Firefox, or Safari (latest version).';
+          default:
+            return 'Unknown blocker: ' + blocker;
+        }
+      }
+
+      function showMobileBlockerAlert(kind, blockers) {
+        var device = kind === 'video' ? 'Camera' : 'Microphone';
+        var msg = '⚠ ' + device + ' access blocked on this device:\n\n';
+        msg += blockers.map(function (b) { return '• ' + explainBlocker(b, kind); }).join('\n\n');
+        alert(msg);
+      }
+
+      function handleTestClick(kind) {
+        return function (e) {
+          e.preventDefault();
+
+          // Pre-flight check: if we KNOW the browser will silently reject on mobile,
+          // show an actionable error immediately (before trying getUserMedia which
+          // would fail with a cryptic "Permission denied" or hang forever).
+          var blockers = detectMobileBlockers();
+          if (blockers.length && IS_MOBILE_OS) {
+            showMobileBlockerAlert(kind, blockers);
+            return;
+          }
+
+          // Call getUserMedia SYNCHRONOUSLY inside the click handler — required on
+          // mobile to preserve user activation. Store the promise on window so
+          // openTestModal can await it once the IIFE finishes loading.
+          var p;
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try { p = navigator.mediaDevices.getUserMedia(gumConstraint(kind)); }
+            catch (err) { p = Promise.reject(err); }
+          } else {
+            p = Promise.reject(new Error('getUserMedia not supported'));
+          }
+
+          // If the permission request throws quickly with a mobile-specific error,
+          // show a helpful message.
+          p.catch(function (err) {
+            if (IS_MOBILE_OS && (err.name === 'NotAllowedError' || err.name === 'SecurityError' || err.name === 'NotSupportedError')) {
+              // Retry blocker detection in case something changed
+              var b2 = detectMobileBlockers();
+              if (b2.length) { showMobileBlockerAlert(kind, b2); return; }
+              // Generic denial message
+              var device = kind === 'video' ? 'camera' : 'microphone';
+              alert('⚠ ' + device.charAt(0).toUpperCase() + device.slice(1) + ' access was denied.\n\n' +
+                    'To fix: tap the padlock/info icon in your browser\'s address bar and grant ' + device + ' permission for this site. Then reload the page.\n\n' +
+                    'Technical: ' + err.name + ' — ' + err.message);
+            }
+          });
+
+          // Wait for openTestModal to be defined (it's set by the async IIFE).
+          // On desktop this is usually already set; on mobile it may take a moment.
+          var attempts = 0;
+          function tryOpen() {
+            if (typeof window.__openTestModal === 'function') {
+              window.__openTestModal(kind, p);
+            } else if (attempts++ < 100) {
+              setTimeout(tryOpen, 50);
+            } else {
+              // Fallback: show a plain video preview if openTestModal never loaded
+              console.warn('[Test] openTestModal not available — using fallback');
+              p.then(function (stream) {
+                var backdrop = document.createElement('div');
+                backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;';
+                if (kind === 'video') {
+                  var vid = document.createElement('video');
+                  vid.autoplay = true; vid.playsInline = true; vid.muted = true;
+                  vid.setAttribute('playsinline', '');
+                  vid.srcObject = stream;
+                  vid.style.cssText = 'max-width:100%;max-height:80vh;border-radius:12px;';
+                  backdrop.appendChild(vid);
+                  vid.play().catch(function(){});
+                } else {
+                  var msg = document.createElement('div');
+                  msg.style.cssText = 'color:white;font-size:1.5rem;margin-bottom:1rem;';
+                  msg.textContent = '🎤 Microphone active';
+                  backdrop.appendChild(msg);
+                }
+                var close = document.createElement('button');
+                close.textContent = 'Done';
+                close.style.cssText = 'margin-top:1rem;padding:0.6rem 1.5rem;border-radius:9999px;background:rgb(249 115 22);color:white;border:none;font-weight:600;cursor:pointer;';
+                close.onclick = function () {
+                  stream.getTracks().forEach(function (t) { t.stop(); });
+                  backdrop.remove();
+                };
+                backdrop.appendChild(close);
+                document.body.appendChild(backdrop);
+              }).catch(function (err) {
+                alert('Camera/mic access denied: ' + (err.message || err.name));
+              });
+            }
+          }
+          tryOpen();
+        };
+      }
+
+      // Register on DOMContentLoaded so buttons exist. If DOM is already ready, run now.
+      function register() {
+        var cam = document.getElementById('btn-test-camera');
+        var mic = document.getElementById('btn-test-mic');
+        if (cam) cam.addEventListener('click', handleTestClick('video'));
+        if (mic) mic.addEventListener('click', handleTestClick('audio'));
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', register);
+      } else {
+        register();
+      }
+    })();
+  </script>
+
+  <!-- Copy & Download handlers — registered synchronously outside the async IIFE
+       so they're active immediately on page load (not after 4+ seconds of async setup). -->
+  <script>
+    (function () {
+      function flashBtn(btn, text, color) {
+        if (btn.dataset._flashing) return;
+        btn.dataset._flashing = '1';
+        const orig = btn.dataset._origText || btn.textContent;
+        btn.dataset._origText = orig;
+        const origBg = btn.dataset._origBg || btn.style.background || '';
+        btn.dataset._origBg = origBg;
+        btn.textContent = text;
+        btn.style.background = color || 'rgb(34 197 94)';
+        btn.disabled = true;
+        setTimeout(function () {
+          btn.textContent = orig;
+          btn.style.background = origBg;
+          btn.disabled = false;
+          delete btn.dataset._flashing;
+        }, 1200);
+      }
+
+      // Classify by ID suffix (survives text mutations from flashBtn)
+      function isCopyBtn(btn) { return /-copy$/.test(btn.id); }
+      function isDownloadBtn(btn) { return /-download$/.test(btn.id); }
+
+      // Delegated listener — fires immediately, even before the main async IIFE finishes
+      document.addEventListener('click', function (e) {
+        const btn = e.target.closest && e.target.closest('.action-btn');
+        if (!btn) return;
+        const targetId = btn.dataset.target;
+        if (!targetId) { console.warn('[action-btn] missing data-target on', btn); return; }
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) { console.warn('[action-btn] target element not found:', targetId); return; }
+        const text = (targetEl.textContent || '').trim();
+        if (!text) { flashBtn(btn, 'Empty!', 'rgb(234 179 8)'); return; }
+        const filename = btn.dataset.filename || 'data.json';
+
+        if (isCopyBtn(btn)) {
+          // Try modern Clipboard API first (sync call, keeps user activation).
+          // Fall back to execCommand for file:// / insecure contexts.
+          let handled = false;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+              navigator.clipboard.writeText(text).then(
+                function () { flashBtn(btn, 'Copied!'); },
+                function (err) {
+                  console.warn('[copy] Clipboard API failed:', err);
+                  fallbackCopy();
+                }
+              );
+              handled = true;
+            } catch (err) {
+              console.warn('[copy] Clipboard API threw:', err);
+            }
+          }
+          if (!handled) fallbackCopy();
+
+          function fallbackCopy() {
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;pointer-events:none;';
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              const ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              flashBtn(btn, ok ? 'Copied!' : 'Copy failed', ok ? null : 'rgb(220 38 38)');
+            } catch (err) {
+              console.error('[copy] fallback failed:', err);
+              flashBtn(btn, 'Copy failed', 'rgb(220 38 38)');
+            }
+          }
+        } else if (isDownloadBtn(btn)) {
+          try {
+            const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.rel = 'noopener';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () {
+              if (a.parentNode) document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 500);
+            flashBtn(btn, 'Downloaded!');
+          } catch (err) {
+            console.error('[download] failed:', err);
+            flashBtn(btn, 'Failed', 'rgb(220 38 38)');
+          }
+        } else {
+          console.warn('[action-btn] unrecognized button (id must end in -copy or -download):', btn.id);
+        }
+      });
+    })();
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a26f34fedcd41b39',t:'MTc4NjAzMTUyOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
